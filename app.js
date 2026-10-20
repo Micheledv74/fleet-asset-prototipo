@@ -1449,7 +1449,7 @@
     PO: { title: 'PURCHASE ORDER', intro: 'Dear Sirs,\nPlease supply the items listed below as per your quotation and the terms of this order. Kindly confirm acceptance and delivery date by return.',
       closing: 'Invoice to be issued only after delivery on board and receipt of the signed delivery note. Please quote our PO number on the invoice and on all documents.',
       clauses: 'All items must be asbestos free as per SOLAS regulation II-1/3-5 and supplied with MD/SDoC.\nEach package to be marked with vessel name and PO number.',
-      cols: { impa: 1, note: 1, asset: 1, cond: 1, due: 1 } }
+      cols: { impa: 1, note: 1, asset: 1, cond: 1 } }
   };
   function tpl() {
     var s = DB.settings || {}, o = JSON.parse(JSON.stringify(TPL_DEF));
@@ -1509,12 +1509,14 @@
     doc.setFontSize(9); doc.setTextColor(30, 30, 30); doc.setFont('helvetica', 'normal');
     var it = doc.splitTextToSize(pdfTxt(K.intro || ''), W - 2 * M); doc.text(it, M, y); y += it.length * 4 + 3;
     // table
-    var C = K.cols || {}, head = ['Row'], body = [];
+    var C = JSON.parse(JSON.stringify(K.cols || {})), head = ['Row'], body = [];
+    if (!d.lines.some(function (l) { return l.asset; })) C.asset = 0;
+    if (d.type === 'PO' && !d.lines.some(function (l) { return l.cond; })) C.cond = 0;
     if (C.impa) head.push('IMPA / Code');
     head.push('Description');
     if (C.asset) head.push('Asset');
     head.push('Qty', 'UOM');
-    if (d.type === 'PO') { head.push('Unit price', 'Disc.', 'Amount'); if (C.cond) head.push('Cond.'); if (C.due) head.push('Delivery'); }
+    if (d.type === 'PO') { head.push('Unit price', 'Disc.', 'Amount'); if (C.cond) head.push('Cond.'); }
     else if (C.fill) head.push('Unit price', 'Disc.', 'LT days', 'Cond.');
     d.lines.forEach(function (l) {
       var r = [String(l.row)];
@@ -1522,14 +1524,15 @@
       r.push(pdfTxt(l.desc + (C.note && l.note ? '\n' + l.note : '')));
       if (C.asset) r.push(pdfTxt(l.asset || ''));
       r.push((l.qty || 0).toLocaleString('en-GB', { maximumFractionDigits: 2 }), l.uom || '');
-      if (d.type === 'PO') { r.push((l.price || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 4 }), l.d1 ? l.d1 + '%' : '', (l.net || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })); if (C.cond) r.push(l.cond || ''); if (C.due) r.push(pdfDate(l.due)); }
+      if (d.type === 'PO') { r.push((l.price || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 4 }), l.d1 ? l.d1 + '%' : '', (l.net || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })); if (C.cond) r.push(l.cond || ''); }
       else if (C.fill) r.push('', '', '', '');
       body.push(r);
     });
     doc.autoTable({ startY: y, head: [head], body: body, margin: { left: M, right: M }, theme: 'grid',
       styles: { font: 'helvetica', fontSize: 8, cellPadding: 1.6, lineColor: [210, 210, 210], lineWidth: 0.2, textColor: [30, 30, 30], valign: 'top' },
       headStyles: { fillColor: col, textColor: [255, 255, 255], fontStyle: 'bold' },
-      columnStyles: (function () { var o = {}, di = head.indexOf('Description'); o[di] = { cellWidth: 'auto' }; head.forEach(function (h, i) { if (/Qty|Unit price|Disc\.|Amount|LT days/.test(h)) o[i] = { halign: 'right' }; if (h === 'Description') o[i] = { cellWidth: d.type === 'PO' ? 56 : 66 }; if (h === 'IMPA / Code') o[i] = { cellWidth: 19 }; if (h === 'Asset') o[i] = { cellWidth: 26 }; if (h === 'Cond.') o[i] = { cellWidth: 19 }; if (h === 'Delivery') o[i] = { cellWidth: 19 }; }); return o; })() });
+      columnStyles: (function () { var o = {}, WD = { 'Row': 9, 'IMPA / Code': 23, 'Asset': 22, 'Qty': 10, 'UOM': 10, 'Unit price': 18, 'Disc.': 10, 'Amount': 19, 'LT days': 12, 'Cond.': 17 }; head.forEach(function (h, i) { o[i] = { cellWidth: WD[h] || 'auto' }; if (/Qty|Unit price|Disc\.|Amount|LT days/.test(h)) o[i].halign = 'right'; }); return o; })(),
+      didParseCell: function (c) { if (c.section === 'head' && /Qty|Unit price|Disc\.|Amount|LT days/.test(String(c.cell.raw))) c.cell.styles.halign = 'right'; } });
     y = doc.lastAutoTable.finalY + 4;
     if (d.type === 'PO') {
       var goods = d.lines.reduce(function (a, l) { return a + (l.net || 0); }, 0), rows = [['Goods', pdfMoney(goods, d.cur)]];
@@ -1634,7 +1637,7 @@
       '<div class="filters">' + lab(L2(['Fatturare a (solo ordini)', 'Invoice to (orders only)']), inp('invoiceTo.name', T.invoiceTo.name)) + lab(L2(['Indirizzo fatturazione', 'Invoice address']), inp('invoiceTo.address', T.invoiceTo.address)) + lab(L2(['Email fatture', 'Invoice email']), inp('invoiceTo.email', T.invoiceTo.email)) + '</div>' +
       lab(L2(['Piè di pagina', 'Footer']), inp('footer', T.footer, '', true)) + '</section>' +
       sec('RFQ', L2(['Richiesta di offerta (RFQ)', 'Request for quotation (RFQ)']), colBox('RFQ', 'impa', 'IMPA / Code') + colBox('RFQ', 'note', L2(['Nota / P/N', 'Note / P/N'])) + colBox('RFQ', 'asset', 'Asset') + colBox('RFQ', 'fill', L2(['Colonne vuote per il fornitore', 'Blank columns for the supplier']))) +
-      sec('PO', L2(['Ordine (PO)', 'Purchase order (PO)']), colBox('PO', 'impa', 'IMPA / Code') + colBox('PO', 'note', L2(['Nota / P/N', 'Note / P/N'])) + colBox('PO', 'asset', 'Asset') + colBox('PO', 'cond', L2(['Condizione', 'Condition'])) + colBox('PO', 'due', L2(['Consegna', 'Delivery']))) +
+      sec('PO', L2(['Ordine (PO)', 'Purchase order (PO)']), colBox('PO', 'impa', 'IMPA / Code') + colBox('PO', 'note', L2(['Nota / P/N', 'Note / P/N'])) + colBox('PO', 'asset', 'Asset') + colBox('PO', 'cond', L2(['Condizione', 'Condition']))) +
       '<div class="note">' + esc(L2(['Le modifiche si salvano subito e valgono per tutti i PDF e le bozze Outlook generate da qui in avanti.', 'Changes are saved immediately and apply to all PDFs and Outlook drafts generated from now on.'])) + '</div>' +
       '<div><button class="btn link" data-act="tplreset">' + esc(L2(['Ripristina modello predefinito', 'Reset to default template'])) + '</button></div>';
     return shell('impostazioni', crumb([[t('fleet'), '#/']]), L2(['Modelli documenti', 'Document templates']), body);
