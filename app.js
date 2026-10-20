@@ -254,7 +254,7 @@
       railLink('#/modulo/pms', 'gear', t('pms'), active === 'pms') +
       railLink('#/logistica' + qs({ nave: ship }), 'cal', L2(['Logistica', 'Logistics']), active === 'logistica') +
       railLink('#/magazzino' + qs({ nave: ship || 'PEP' }), 'box', t('stores'), active === 'magazzino') +
-      railLink('#/documenti', 'doc', L2(['Documentazione', 'Documentation']), active === 'documenti') +
+      railLink('#/documenti', 'doc', L2(['Documenti', 'Documents']), active === 'documenti') +
       railLink('#/modulo/certificati', 'doc', t('certs'), active === 'certificati') +
       railLink('#/scadenze' + qs({ nave: ship }), 'cal', t('due'), active === 'scadenze') +
       railLink('#/budget' + qs({ nave: ship || 'PEP' }), 'chart', t('budget'), active === 'budget') +
@@ -289,8 +289,8 @@
         '<div style="display:flex;justify-content:space-between;gap:8px"><span class="j" style="font-size:12px;color:var(--teal);font-weight:600">' + esc(d.num) + '</span><span class="t-bad" style="font-size:11px;font-weight:800">' + daysBetween(d.due, TODAY) + ' ' + esc(t('daysLate')) + '</span></div>' +
         '<span style="font-size:13px;font-weight:600">' + esc(d.desc) + '</span><span class="mute" style="font-size:12px">' + esc(supName(d.sup)) + ' · <span class="j">' + money(d.total, d.cur) + '</span></span></a>';
     }).join('');
-    var dnBy = DB.ships.map(function (s) { var n = docs(function (d) { return d.ship === s.code && d.type === 'DN' && d.status === 'spedita'; }).length; return n ? s.code + ' ' + n : null; }).filter(Boolean).join(' · ');
-    var dnTot = docs(function (d) { return d.type === 'DN' && d.status === 'spedita'; }).length;
+    var dnBy = DB.ships.map(function (s) { var n = docs(function (d) { return d.ship === s.code && d.type === 'DN' && isOpen(d); }).length; return n ? s.code + ' ' + n : null; }).filter(Boolean).join(' · ');
+    var dnTot = docs(function (d) { return d.type === 'DN' && isOpen(d); }).length;
     var demo = byId('DEMO-RQ'), demoChain = docs(function (d) { return d.demo; });
     var demoLast = demoChain.slice().sort(function (a, b) { return FLOWORDER[b.type] - FLOWORDER[a.type]; })[0];
     var side = '<aside class="side">' +
@@ -316,7 +316,7 @@
     var u = rm.b ? (rm.o + rm.d) / rm.b : 0, pr = yearFrac();
     var wd = Math.min(100, rm.b ? rm.d / rm.b * 100 : 0), wo = Math.min(100 - wd, rm.b ? rm.o / rm.b * 100 : 0);
     var exTot = ex.o + ex.d;
-    return '<div class="stack" style="gap:6px"><div style="display:flex;justify-content:space-between;font-size:12px"><span class="mute">' + esc(t('rm')) + ' 2026</span><span class="j" style="font-weight:600">' + nf(rm.o + rm.d, 0) + ' / ' + nf(rm.b, 0) + ' €</span></div>' +
+    return '<div class="stack" style="gap:6px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:12px"><span class="mute">' + esc(t('rm')) + ' 2026</span><span class="j" style="font-weight:600;white-space:nowrap">' + nf(rm.o + rm.d, 0) + ' / ' + nf(rm.b, 0) + ' €</span></div>' +
       '<div class="bar" role="img" aria-label="' + Math.round(u * 100) + '%"><i style="width:' + wd + '%;background:var(--bar1)"></i><i style="width:' + wo + '%;background:var(--bar2)"></i></div>' +
       '<div style="font-size:12px" class="' + (u > pr ? 't-bad' : 'mute') + '">' + esc(t('used')) + ' ' + Math.round(u * 100) + '% · ' + esc(t('prorata')) + ' ' + Math.round(pr * 100) + '%</div>' +
       (exTot > 0 ? '<div style="font-size:12px" class="t-bad">' + esc(t('extra')) + ': <span class="j">' + nf(exTot, 0) + ' €</span></div>' : '') + '</div>';
@@ -352,7 +352,9 @@
         '<a href="#/budget' + qs({ nave: code }) + '"><b>' + esc(t('budget')) + '</b>' + shipBudgetBlock(code) + '</a>' +
         '<a href="#/scadenze' + qs({ nave: code }) + '"><b>' + esc(t('due')) + '</b><span class="n j">' + docs(function (d) { return d.ship === code && isLate(d); }).length + '</span><span class="t-bad" style="font-size:12px">' + esc(t('sc_over')) + '</span></a>' +
         '<a class="off" href="#/modulo/pms"><b>' + esc(t('pms')) + '</b><span class="mute" style="font-size:12px">' + esc(t('inPrep')) + '</span></a>' +
-        '<a class="off" href="#/modulo/magazzino"><b>' + esc(t('stores')) + '</b><span class="mute" style="font-size:12px">' + esc(t('inPrep')) + '</span></a>' +
+        '<a href="#/magazzino' + qs({ nave: code }) + '"><b>' + esc(t('stores')) + '</b><span class="n j">' + arrivals(code).length + '</span><span class="mute" style="font-size:12px">' + esc(L2(['arrivi da caricare', 'arrivals to load'])) + '</span></a>' +
+        '<a href="#/logistica' + qs({ nave: code }) + '"><b>' + esc(L2(['Logistica', 'Logistics'])) + '</b><span class="n j">' + docs(function (d) { return d.ship === code && d.type === 'DN' && isOpen(d); }).length + '</span><span class="mute" style="font-size:12px">' + esc(L2(['consegne in corso', 'deliveries in progress'])) + '</span></a>' +
+        '<a href="#/documenti?q=' + encodeURIComponent(code) + '"><b>' + esc(L2(['Documenti', 'Documents'])) + '</b><span class="n j">' + (DB.techdocs || []).filter(function (td) { return (td.ships || []).indexOf(code) >= 0; }).length + '</span><span class="mute" style="font-size:12px">' + esc(L2(['documenti tecnici', 'technical documents'])) + '</span></a>' +
         '<a class="off" href="#/modulo/certificati"><b>' + esc(t('certs')) + '</b><span class="mute" style="font-size:12px">' + esc(t('inPrep')) + '</span></a></div>' +
         '<h2 style="margin:8px 0 0;font-size:15px">' + esc(t('recent')) + '</h2>' + gridTable(rec, ['num', 'type', 'desc', 'status', 'sup', 'date'], null, null) + '</div></div>';
     }
@@ -547,7 +549,7 @@
 
   /* ---------- budget ---------- */
   function pageBudget(q) {
-    var ship = q.nave && DB.budgets[q.nave] ? q.nave : 'PEP';
+    var ship = q.nave && DB.budgets[q.nave] ? q.nave : 'PEP', noBud = q.nave && !DB.budgets[q.nave];
     var tabs = DB.ships.filter(function (s) { return DB.budgets[s.code]; }).map(function (s) { return '<a class="' + (s.code === ship ? 'on' : '') + '" href="#/budget' + qs({ nave: s.code }) + '">' + s.code + ' · ' + esc(s.name) + '</a>'; }).join('');
     var B = budgetAgg(ship), A = acctMap(), pr = yearFrac();
     var kids = {}; DB.accounts.forEach(function (a) { var p = a.parent || '_'; (kids[p] = kids[p] || []).push(a); });
@@ -583,6 +585,7 @@
       '<label class="tog"><input type="checkbox" data-act="zero"' + (UI.showZero ? ' checked' : '') + '> ' + esc(t('showZero')) + '</label></div>' +
       '<div class="tablebox btree"><table class="grid"><thead><tr><th>' + esc(t('acct')) + '</th><th class="num">' + esc(t('b_budget')) + '</th><th class="num">' + esc(t('b_ord')) + '</th><th class="num">' + esc(t('b_del')) + '</th><th class="num">' + esc(t('b_rem')) + '</th><th>' + esc(t('b_use')) + '</th><th class="num">' + esc(t('b_pr')) + '</th></tr></thead><tbody>' + tr + '</tbody></table></div>' +
       '<div class="note">' + esc(t('b_note')) + '</div>';
+    if (noBud) body = '<div class="note">' + esc(shipBy(q.nave).name + L2([': nessun budget in InfoSHIP. Qui sotto il budget di ', ': no budget in InfoSHIP. Below the budget of '])) + shipBy(ship).name + '.</div>' + body;
     return shell('budget', crumb([[t('fleet'), '#/'], [shipBy(ship).name, '#/nave/' + ship]]), t('budget') + ' 2026 · ' + ship, body);
   }
 
@@ -676,7 +679,7 @@
       if (d.signed) foot = '<div class="note" style="display:flex;gap:8px;align-items:center"><span class="chip c-ok">' + esc(t('signed').split(' ')[0] + ' ✓') + '</span>' + esc(d.signed) + '</div>';
     } else {
       var rec = d.type === 'PO' ? poReceived(d) : null;
-      var priced = d.type !== 'RQ';
+      var priced = d.type !== 'RQ' && !(d.type === 'RFQ' && d.status !== 'quotata');
       head = ['l_row', 'l_code', 'c_desc', 'l_uom', 'l_qty'].concat(priced ? ['l_price', 'l_disc', 'l_net'] : []).concat(rec ? ['l_recv', 'l_res'] : []).concat(['l_due']);
       rows = d.lines.map(function (l) {
         var r = rec ? (rec[l.row] || 0) : 0, res = l.qty - r;
