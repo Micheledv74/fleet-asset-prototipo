@@ -682,7 +682,7 @@
   function receiveModal(dn) {
     var bg = document.createElement('div'); bg.className = 'modal-bg';
     var rows = (dn.lines || []).map(function (l, i) {
-      return '<tr><td class="j">' + l.row + '</td><td>' + esc(l.desc) + (l.note ? '<div class="mute" style="font-size:12px">' + esc(l.note) + '</div>' : '') + '</td><td class="num j">' + nf(l.qty) + ' ' + esc(l.uom) + '</td><td><input name="q' + i + '" value="' + nf(l.qty) + '" inputmode="decimal" style="width:90px;text-align:right" aria-label="' + esc(t('l_recv')) + ' ' + l.row + '"></td><td><input name="loc' + i + '" value="' + esc(locOf(dn.ship, l.item) || '') + '" placeholder="' + esc(L2(['es. Magazzino macchina A3', 'e.g. Engine store A3'])) + '" style="width:170px" aria-label="' + esc(L2(['Ubicazione', 'Location'])) + '"></td></tr>';
+      return '<tr><td class="j">' + l.row + '</td><td>' + esc(l.desc) + (l.note ? '<div class="mute" style="font-size:12px">' + esc(l.note) + '</div>' : '') + '</td><td class="num j">' + nf(l.qty) + ' ' + esc(l.uom) + '</td><td><input name="q' + i + '" value="' + nf(l.qty) + '" inputmode="decimal" style="width:90px;text-align:right" aria-label="' + esc(t('l_recv')) + ' ' + l.row + '"></td><td>' + locSelect(dn.ship, i, locOf(dn.ship, l.item)) + '</td></tr>';
     }).join('');
     bg.innerHTML = '<form class="modal" style="width:min(980px,100%);max-height:92vh;overflow:auto" role="dialog" aria-modal="true" aria-label="' + esc(t('rcvTitle')) + '"><h3>' + esc(L2(['Ricevi e carica a magazzino', 'Receive and load stores'])) + ' · ' + esc(dn.num) + '</h3>' +
       (rows ? '<p class="mute" style="margin:0;font-size:13px">' + esc(t('rcvTxt')) + '</p><div class="tablebox" style="max-height:45vh;overflow:auto"><table class="grid" style="min-width:560px"><thead><tr><th>' + esc(t('l_row')) + '</th><th>' + esc(t('c_desc')) + '</th><th class="num">' + esc(t('l_ship')) + '</th><th>' + esc(t('l_recv')) + '</th><th>' + esc(L2(['Ubicazione a bordo', 'Onboard location'])) + '</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '') +
@@ -704,7 +704,7 @@
         if (!l.item && q > 0) l.item = ensureItem(l, po);
         if (q > 0 && l.item) {
           var pl = po && po.lines ? po.lines.filter(function (x) { return x.row === l.src; })[0] : null;
-          var loc = (form.elements['loc' + i].value || '').trim(); if (loc) { DB.loc = DB.loc || {}; DB.loc[dn.ship + '|' + l.item] = loc; }
+          var loc = locRead(form, i); if (loc) { DB.loc = DB.loc || {}; DB.loc[dn.ship + '|' + l.item] = loc; }
           DB.moves.push({ id: 'M-' + dn.id + '-' + l.row + '-' + Date.now(), ship: dn.ship, item: l.item, date: TODAY, qty: q, kind: 'carico', doc: dn.id, row: l.row, loc: loc, cost: pl ? Math.round(unitEur(po, pl) * 10000) / 10000 : 0 });
         }
       });
@@ -768,18 +768,19 @@
     } else {
       var rows = items.filter(function (it) {
         var s = S[it.id], mn = minOf(ship, it.id);
-        return (!q.q || ((it.impa || '') + ' ' + it.code + ' ' + it.desc).toUpperCase().indexOf(q.q.toUpperCase()) >= 0) && (!q.under || (mn > 0 && s.qty < mn)) && (!q.stock || s.qty > 0) && (!q.gen || it.generic);
+        return (!q.q || ((it.impa || '') + ' ' + it.code + ' ' + it.desc).toUpperCase().indexOf(q.q.toUpperCase()) >= 0) && (!q.under || (mn > 0 && s.qty < mn)) && (!q.stock || s.qty > 0) && (!q.gen || it.generic) && (!q.pl || locParts(locOf(ship, it.id))[0] === q.pl);
       }).sort(function (a, b) { return S[b.id].val - S[a.id].val || (a.desc < b.desc ? -1 : 1); });
       body = '<div class="filters"><input type="search" data-filter="q" value="' + esc(q.q || '') + '" placeholder="' + esc(t('filterTxt')) + '" aria-label="' + esc(t('filterTxt')) + '">' +
+        (placementsOf(ship).length ? '<select data-filter="pl" aria-label="' + esc(L2(['Ubicazione', 'Placement'])) + '"><option value="">' + esc(L2(['Tutte le ubicazioni', 'All placements'])) + '</option>' + placementsOf(ship).map(function (p) { return '<option' + (q.pl === p.code ? ' selected' : '') + '>' + esc(p.code) + '</option>'; }).join('') + '</select>' : '') +
         '<label class="tog"><input type="checkbox" data-filter="stock"' + (q.stock ? ' checked' : '') + '> ' + esc(t('st_withStock')) + '</label>' +
         '<label class="tog"><input type="checkbox" data-filter="under"' + (q.under ? ' checked' : '') + '> ' + esc(t('st_under')) + '</label>' +
         '<label class="tog"><input type="checkbox" data-filter="gen"' + (q.gen ? ' checked' : '') + '> ' + esc(t('st_generic')) + '</label>' +
         '<span style="flex:1"></span><span class="mute j" style="font-size:12px">' + rows.length + ' ' + esc(t('rows')) + '</span>' +
         '<button class="btn" data-act="reorder" data-ship="' + ship + '"' + (under ? '' : ' disabled') + '>' + esc(t('st_reorder')) + '</button></div>' +
-        '<div class="tablebox"><table class="grid"><thead><tr><th>IMPA / ' + esc(t('l_code')) + '</th><th>' + esc(t('c_desc')) + '</th><th>' + esc(t('l_uom')) + '</th><th class="num">' + esc(t('st_stock')) + '</th><th class="num">' + esc(t('st_incoming')) + '</th><th class="num">' + esc(t('st_min')) + '</th><th class="num">' + esc(t('st_avg')) + '</th><th class="num">' + esc(t('st_val')) + '</th><th>' + esc(t('st_lastSup')) + '</th></tr></thead><tbody>' +
+        '<div class="tablebox"><table class="grid"><thead><tr><th>' + esc(t('l_code')) + '</th><th>' + esc(t('c_desc')) + '</th><th>' + esc(L2(['Ubicazione', 'Placement'])) + '</th><th>' + esc(t('l_uom')) + '</th><th class="num">' + esc(t('st_stock')) + '</th><th class="num">' + esc(t('st_incoming')) + '</th><th class="num">' + esc(t('st_min')) + '</th><th class="num">' + esc(t('st_avg')) + '</th><th class="num">' + esc(t('st_val')) + '</th><th>' + esc(t('st_lastSup')) + '</th></tr></thead><tbody>' +
         rows.map(function (it) {
           var s = S[it.id], mn = minOf(ship, it.id), low = mn > 0 && s.qty < mn;
-          return '<tr class="r" data-href="#/articolo/' + it.id + '?nave=' + ship + '"><td class="j">' + (it.impa ? esc(it.impa) : '<span class="chip c-warn">GI0001</span>') + '</td><td>' + esc(it.desc) + '</td><td>' + esc(it.uom) + '</td>' +
+          return '<tr class="r" data-href="#/articolo/' + it.id + '?nave=' + ship + '"><td class="j">' + (it.impa || (!it.generic && it.code) ? esc(it.impa || it.code) : '<span class="chip c-warn">GI0001</span>') + '</td><td>' + esc(it.desc) + '</td><td style="font-size:12px">' + esc(locOf(ship, it.id) || '—') + '</td><td>' + esc(it.uom) + '</td>' +
             '<td class="num j ' + (low ? 't-bad' : '') + '"><b>' + nf(s.qty) + '</b></td><td class="num j">' + (s.inArr ? nf(s.inArr) : '—') + '</td><td class="num j">' + (mn ? nf(mn) : '—') + '</td>' +
             '<td class="num j">' + (s.qty ? nf(s.val / s.qty) : (s.last ? '<span class="mute">' + nf(s.last.price) + '</span>' : '—')) + '</td><td class="num j">' + (s.val ? nf(s.val) : '—') + '</td><td>' + esc(s.last ? supName(s.last.sup) : '—') + '</td></tr>';
         }).join('') + '</tbody></table></div>';
@@ -1488,7 +1489,7 @@
     doc.setFontSize(8.5); var yi = y;
     info.forEach(function (r) { doc.setTextColor(110, 110, 110); doc.text(pdfTxt(r[0]), 112, yi); doc.setTextColor(30, 30, 30); var tl = doc.splitTextToSize(pdfTxt(r[1]), 52); doc.text(tl, 144, yi); yi += Math.max(1, tl.length) * 4; });
     y = Math.max(y1, yi) + 2;
-    if (d.type === 'PO' && (T.invoiceTo.name || T.invoiceTo.address)) { y = box(M, 85, 'Invoice to', [T.invoiceTo.name, T.invoiceTo.address, T.invoiceTo.email].filter(Boolean)) + 2; }
+    var IV = invFor(d.ship, T); if (d.type === 'PO' && (IV.name || IV.address)) { y = box(M, 85, 'Invoice to', [IV.name, IV.address, IV.vat ? 'VAT ' + IV.vat : '', IV.email].filter(Boolean)) + 2; }
     y += 2;
     doc.setFontSize(9); doc.setTextColor(30, 30, 30); doc.setFont('helvetica', 'normal');
     var it = doc.splitTextToSize(pdfTxt(K.intro || ''), W - 2 * M); doc.text(it, M, y); y += it.length * 4 + 3;
@@ -1496,7 +1497,7 @@
     var C = JSON.parse(JSON.stringify(K.cols || {})), head = ['Row'], body = [];
     if (!d.lines.some(function (l) { return l.asset; })) C.asset = 0;
     if (d.type === 'PO' && !d.lines.some(function (l) { return l.cond; })) C.cond = 0;
-    if (C.impa) head.push('IMPA / Code');
+    if (C.impa) head.push('Code');
     head.push('Description');
     if (C.asset) head.push('Asset');
     head.push('Qty', 'UOM');
@@ -1505,7 +1506,8 @@
     d.lines.forEach(function (l) {
       var r = [String(l.row)];
       if (C.impa) r.push(l.impa || (l.code && l.code !== 'GI0001' ? l.code : ''));
-      r.push(pdfTxt(l.desc + (C.note && l.note ? '\n' + l.note : '')));
+      var cd0 = C.impa ? (l.impa || (l.code && l.code !== 'GI0001' ? l.code : '')) : '', nt0 = (l.note || '').split(' · ').filter(function (x) { return !cd0 || x.trim() !== 'P/N ' + cd0; }).join(' · ');
+      r.push(pdfTxt(l.desc + (C.note && nt0 ? '\n' + nt0 : '')));
       if (C.asset) r.push(pdfTxt(l.asset || ''));
       r.push((l.qty || 0).toLocaleString('en-GB', { maximumFractionDigits: 2 }), l.uom || '');
       if (d.type === 'PO') { r.push((l.price || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 4 }), l.d1 ? l.d1 + '%' : '', (l.net || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })); if (C.cond) r.push(l.cond || ''); }
@@ -1515,7 +1517,7 @@
     doc.autoTable({ startY: y, head: [head], body: body, margin: { left: M, right: M }, theme: 'grid',
       styles: { font: 'helvetica', fontSize: 8, cellPadding: 1.6, lineColor: [210, 210, 210], lineWidth: 0.2, textColor: [30, 30, 30], valign: 'top' },
       headStyles: { fillColor: col, textColor: [255, 255, 255], fontStyle: 'bold' },
-      columnStyles: (function () { var o = {}, WD = { 'Row': 9, 'IMPA / Code': 23, 'Asset': 22, 'Qty': 10, 'UOM': 10, 'Unit price': 18, 'Disc.': 10, 'Amount': 19, 'LT days': 12, 'Cond.': 17 }; head.forEach(function (h, i) { o[i] = { cellWidth: WD[h] || 'auto' }; if (/Qty|Unit price|Disc\.|Amount|LT days/.test(h)) o[i].halign = 'right'; }); return o; })(),
+      columnStyles: (function () { var o = {}, WD = { 'Row': 9, 'Code': 23, 'Asset': 22, 'Qty': 10, 'UOM': 10, 'Unit price': 18, 'Disc.': 10, 'Amount': 19, 'LT days': 12, 'Cond.': 17 }; head.forEach(function (h, i) { o[i] = { cellWidth: WD[h] || 'auto' }; if (/Qty|Unit price|Disc\.|Amount|LT days/.test(h)) o[i].halign = 'right'; }); return o; })(),
       didParseCell: function (c) { if (c.section === 'head' && /Qty|Unit price|Disc\.|Amount|LT days/.test(String(c.cell.raw))) c.cell.styles.halign = 'right'; } });
     y = doc.lastAutoTable.finalY + 4;
     if (d.type === 'PO') {
@@ -1618,10 +1620,9 @@
       '<div class="filters">' + lab(L2(['Logo (PNG o JPG, max 300 KB)', 'Logo (PNG or JPG, max 300 KB)']), '<input type="file" accept="image/png,image/jpeg" data-act="logo">') +
       (T.logo ? '<img src="' + T.logo + '" alt="Logo" style="max-height:48px;max-width:160px;background:#fff;padding:4px;border-radius:6px">' + '<button class="btn sm ghost" data-act="logodel">' + esc(L2(['Rimuovi logo', 'Remove logo'])) + '</button>' : '') +
       lab(L2(['Colore', 'Colour']), '<input type="color" data-set="color" value="' + esc(T.color) + '" style="width:60px;height:36px;padding:2px">') + '</div>' +
-      '<div class="filters">' + lab(L2(['Fatturare a (solo ordini)', 'Invoice to (orders only)']), inp('invoiceTo.name', T.invoiceTo.name)) + lab(L2(['Indirizzo fatturazione', 'Invoice address']), inp('invoiceTo.address', T.invoiceTo.address)) + lab(L2(['Email fatture', 'Invoice email']), inp('invoiceTo.email', T.invoiceTo.email)) + '</div>' +
-      lab(L2(['Piè di pagina', 'Footer']), inp('footer', T.footer, '', true)) + '</section>' +
-      sec('RFQ', L2(['Richiesta di offerta (RFQ)', 'Request for quotation (RFQ)']), colBox('RFQ', 'impa', 'IMPA / Code') + colBox('RFQ', 'note', L2(['Nota / P/N', 'Note / P/N'])) + colBox('RFQ', 'asset', 'Asset') + colBox('RFQ', 'fill', L2(['Colonne vuote per il fornitore', 'Blank columns for the supplier']))) +
-      sec('PO', L2(['Ordine (PO)', 'Purchase order (PO)']), colBox('PO', 'impa', 'IMPA / Code') + colBox('PO', 'note', L2(['Nota / P/N', 'Note / P/N'])) + colBox('PO', 'asset', 'Asset') + colBox('PO', 'cond', L2(['Condizione', 'Condition']))) +
+      '<div class="filters">' + lab(L2(['Piè di pagina', 'Footer']), inp('footer', T.footer, '', true)) + '</div></section>' + invoiceSection(T) +
+      sec('RFQ', L2(['Richiesta di offerta (RFQ)', 'Request for quotation (RFQ)']), colBox('RFQ', 'impa', L2(['Codice (IMPA o del costruttore)', 'Code (IMPA or maker)'])) + colBox('RFQ', 'note', L2(['Nota / P/N', 'Note / P/N'])) + colBox('RFQ', 'asset', 'Asset') + colBox('RFQ', 'fill', L2(['Colonne vuote per il fornitore', 'Blank columns for the supplier']))) +
+      sec('PO', L2(['Ordine (PO)', 'Purchase order (PO)']), colBox('PO', 'impa', L2(['Codice (IMPA o del costruttore)', 'Code (IMPA or maker)'])) + colBox('PO', 'note', L2(['Nota / P/N', 'Note / P/N'])) + colBox('PO', 'asset', 'Asset') + colBox('PO', 'cond', L2(['Condizione', 'Condition']))) +
       '<div class="note">' + esc(L2(['Le modifiche si salvano subito e valgono per tutti i PDF e le bozze Outlook generate da qui in avanti.', 'Changes are saved immediately and apply to all PDFs and Outlook drafts generated from now on.'])) + '</div>' +
       '<div><button class="btn link" data-act="tplreset">' + esc(L2(['Ripristina modello predefinito', 'Reset to default template'])) + '</button></div>';
     return shell('impostazioni', crumb([[t('fleet'), '#/']]), L2(['Modelli documenti', 'Document templates']), body);
@@ -2349,7 +2350,7 @@
       return '<div class="card stack" style="gap:8px;padding:12px"><div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:15px">' + esc(l.desc) + '</b><span class="j mute">' + l.row + '</span></div>' + (l.note ? '<div class="mute" style="font-size:12px">' + esc(l.note) + '</div>' : '') +
         '<div style="display:flex;align-items:center;gap:10px"><span class="mute" style="font-size:13px;flex:1">' + esc(L2(['Spediti', 'Shipped'])) + ' <b class="j">' + nf(l.qty) + '</b> ' + esc(l.uom) + '</span>' +
         '<button type="button" class="btn step" data-act="rcvstep" data-i="' + i + '" data-d="-1" aria-label="-">−</button><input name="q' + i + '" value="' + nf(l.qty) + '" inputmode="decimal" class="j" style="width:70px;text-align:center;font-size:18px"><button type="button" class="btn step" data-act="rcvstep" data-i="' + i + '" data-d="1" aria-label="+">+</button></div>' +
-        '<input name="loc' + i + '" value="' + esc(locOf(d.ship, l.item) || '') + '" placeholder="' + esc(L2(['Ubicazione (es. Magazzino macchina A3)', 'Location'])) + '"></div>';
+        locSelect(d.ship, i, locOf(d.ship, l.item)) + '</div>';
     }).join('');
     return wrap('<section class="card stack" style="gap:4px"><span class="j mute">' + esc(d.num) + (po ? ' · PO ' + esc(po.num) : '') + '</span><h1 class="h1" style="font-size:20px">' + esc(d.desc) + '</h1><span class="mute" style="font-size:13px">' + esc(supName(d.sup)) + '</span></section>' +
       '<form id="rcvform" data-id="' + d.id + '" class="stack" style="gap:10px">' + (lines || '<div class="card stack"><label>' + esc(L2(['Colli ricevuti', 'Packages received'])) + '<input name="pk" inputmode="numeric" value="1" style="font-size:18px"></label></div>') +
@@ -2368,7 +2369,7 @@
         if (!l.item && q > 0) l.item = ensureItem(l, po);
         if (q > 0 && l.item) {
           var pl = po && po.lines ? po.lines.filter(function (x) { return x.row === l.src; })[0] : null;
-          var lc = (f.elements['loc' + i].value || '').trim(); if (lc) { DB.loc = DB.loc || {}; DB.loc[dn.ship + '|' + l.item] = lc; }
+          var lc = locRead(f, i); if (lc) { DB.loc = DB.loc || {}; DB.loc[dn.ship + '|' + l.item] = lc; }
           DB.moves.push({ id: 'M-' + dn.id + '-' + l.row + '-' + Date.now(), ship: dn.ship, item: l.item, date: TODAY, qty: q, kind: 'carico', doc: dn.id, row: l.row, loc: lc, cost: pl ? Math.round(unitEur(po, pl) * 10000) / 10000 : 0 });
         }
       });
@@ -2489,9 +2490,9 @@
       var a = r.seg[0];
       return [['bud', t('budget'), '#/budget' + qs({ nave: r.q.nave || 'PEP' }), null, a === 'budget'], ['acc', L2(['Contabilità', 'Accounting']), '#/contabilita', null, a === 'contabilita']];
     } },
-    set: { act: ['proposte', 'impostazioni', 'dati'], tabs: function (r) {
+    set: { act: ['proposte', 'impostazioni', 'magazzini', 'dati'], tabs: function (r) {
       var a = r.seg[0];
-      return [['gen', L2(['Generale', 'General']), '#/proposte', null, a === 'proposte'], ['tpl', L2(['Modelli documenti', 'Document templates']), '#/impostazioni', null, a === 'impostazioni'], ['dati', t('data'), '#/dati', null, a === 'dati']];
+      return [['gen', L2(['Generale', 'General']), '#/proposte', null, a === 'proposte'], ['tpl', L2(['Modelli documenti', 'Document templates']), '#/impostazioni', null, a === 'impostazioni'], ['wh', L2(['Magazzini', 'Warehouses']), '#/magazzini', null, a === 'magazzini'], ['dati', t('data'), '#/dati', null, a === 'dati']];
     } }
   };
   function secOf(active) { for (var k in SEC) if (SEC[k].act.indexOf(active) >= 0) return k; return null; }
@@ -2576,6 +2577,65 @@
     return '<nav class="tabs doctabs">' + keys.map(function (k) { return '<a href="#" onclick="return false" data-act="dtab" data-k="' + k + '" class="' + (k === cur ? 'on' : '') + '">' + lab[k] + '</a>'; }).join('') + '</nav>' + parts[cur];
   }
 
+
+  /* ---------- magazzini e ubicazioni per nave (anagrafica come InfoSHIP) ---------- */
+  function whOf(ship) { DB.warehouses = DB.warehouses || {}; return DB.warehouses[ship]; }
+  function placementsOf(ship) { var w = whOf(ship); return w ? w.placements.filter(function (p) { return !p.cancelled; }) : []; }
+  function defPlacement(ship) { var p = placementsOf(ship); return (p.filter(function (x) { return x.default; })[0] || p[0] || {}).code || ''; }
+  function locParts(v) { v = v || ''; var i = v.indexOf(' · '); return i < 0 ? [v, ''] : [v.slice(0, i), v.slice(i + 3)]; }
+  function locSelect(ship, i, cur) {
+    var pl = placementsOf(ship), lp = locParts(cur), sel = pl.some(function (p) { return p.code === lp[0]; }) ? lp[0] : defPlacement(ship), det = pl.some(function (p) { return p.code === lp[0]; }) ? lp[1] : cur || '';
+    if (!pl.length) return '<input name="loc' + i + '" value="' + esc(cur || '') + '" placeholder="' + esc(L2(['es. Magazzino macchina A3', 'e.g. Engine store A3'])) + '" style="width:170px">';
+    return '<span style="display:inline-flex;gap:6px;flex-wrap:wrap"><select name="pl' + i + '" aria-label="' + esc(L2(['Ubicazione', 'Placement'])) + '">' + pl.map(function (p) { return '<option value="' + esc(p.code) + '"' + (p.code === sel ? ' selected' : '') + '>' + esc(p.code) + '</option>'; }).join('') + '</select>' +
+      '<input name="loc' + i + '" value="' + esc(det) + '" placeholder="' + esc(L2(['scaffale / posizione', 'shelf / position'])) + '" style="width:130px"></span>';
+  }
+  function locRead(f, i) { var pl = f.elements['pl' + i], d = (f.elements['loc' + i] ? f.elements['loc' + i].value : '').trim(); return pl ? pl.value + (d ? ' · ' + d : '') : d; }
+  function pageWarehouses(q) {
+    var ships = DB.ships, ship = q.nave || 'MDT', w = whOf(ship);
+    var pick = '<div class="shippick">' + ships.map(function (s) { return '<a class="' + (s.code === ship ? 'on' : '') + '" href="#/magazzini?nave=' + s.code + '">' + s.code + '</a>'; }).join('') + '</div>';
+    if (!w) return shell('magazzini', crumb([[t('fleet'), '#/']]), L2(['Magazzini', 'Warehouses']), pick + '<div class="card stack"><div class="empty">' + esc(L2(['Nessun magazzino per questa nave.', 'No warehouse for this vessel.'])) + '</div><button class="btn pri" style="align-self:flex-start" data-act="whcopy" data-from="MDT" data-to="' + ship + '">' + esc(L2(['Crea copiando la struttura di MED TOSCANA', 'Create copying MED TOSCANA structure'])) + '</button></div>');
+    var f = function (k, v, wd) { return '<input data-whf="' + ship + '|' + k + '" value="' + esc(v || '') + '" style="width:' + (wd || 220) + 'px">'; };
+    var lab = function (l, h) { return '<label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">' + esc(l) + h + '</label>'; };
+    var used = {}; Object.keys(DB.loc || {}).forEach(function (k) { if (k.indexOf(ship + '|') === 0) { var c = locParts(DB.loc[k])[0]; used[c] = (used[c] || 0) + 1; } });
+    var rows = w.placements.map(function (p, i) {
+      var pf = function (k, wd) { return '<input data-plf="' + ship + '|' + i + '|' + k + '" value="' + esc(p[k] || '') + '" style="width:' + wd + 'px">'; };
+      return '<tr' + (p.cancelled ? ' style="opacity:.5"' : '') + '><td>' + pf('code', 150) + '</td><td>' + pf('desc', 260) + '</td><td>' + pf('layout', 150) + '</td>' +
+        '<td style="text-align:center"><input type="radio" name="pldef" data-pldef="' + ship + '|' + i + '"' + (p.default ? ' checked' : '') + ' aria-label="Default"></td>' +
+        '<td style="text-align:center"><input type="checkbox" data-plcan="' + ship + '|' + i + '"' + (p.cancelled ? ' checked' : '') + ' aria-label="' + esc(L2(['Annullata', 'Cancelled'])) + '"></td><td class="num j">' + (used[p.code] || '') + '</td></tr>';
+    }).join('');
+    var others = ships.filter(function (s) { return s.code !== ship && whOf(s.code); }).map(function (s) { return '<option value="' + s.code + '">' + s.code + ' · ' + esc(s.name) + '</option>'; }).join('');
+    var body = pick + '<section class="card stack"><h2>' + esc(L2(['Magazzino', 'Warehouse'])) + '</h2><div class="filters" style="align-items:flex-end">' +
+      lab(L2(['Codice', 'Code']), f('code', w.code, 150)) + lab(L2(['Descrizione', 'Description']), f('desc', w.desc, 280)) +
+      lab(L2(['Gestito da', 'Edit side']), '<select data-whf="' + ship + '|side"><option value="Remote"' + (w.side === 'Remote' ? ' selected' : '') + '>Remote (' + esc(L2(['bordo', 'vessel'])) + ')</option><option value="Local"' + (w.side === 'Local' ? ' selected' : '') + '>Local (' + esc(L2(['ufficio', 'office'])) + ')</option></select>') +
+      '<label class="tog"><input type="checkbox" data-whc="' + ship + '|central"' + (w.central ? ' checked' : '') + '> ' + esc(L2(['Magazzino centrale', 'Central warehouse'])) + '</label></div></section>' +
+      '<section class="card stack"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2>' + esc(L2(['Ubicazioni', 'Placements'])) + '</h2><span style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" data-act="pladd" data-ship="' + ship + '">' + esc(L2(['Aggiungi ubicazione', 'Add placement'])) + '</button>' +
+      (others ? '<select id="whfrom" aria-label="from">' + others + '</select><button class="btn sm" data-act="whcopy" data-to="' + ship + '">' + esc(L2(['Copia struttura da', 'Copy structure from'])) + '</button>' : '') + '</span></div>' +
+      '<div class="tablebox"><table class="grid edit"><thead><tr><th>' + esc(L2(['Ubicazione', 'Placement'])) + '</th><th>' + esc(L2(['Descrizione', 'Description'])) + '</th><th>Layout</th><th>Default</th><th>' + esc(L2(['Annullata', 'Cancelled'])) + '</th><th class="num">' + esc(L2(['Articoli', 'Items'])) + '</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<div class="mute" style="font-size:12px">' + esc(L2(['Struttura presa da InfoSHIP (MED TOSCANA) e replicata sulle altre navi; i codici restano quelli di InfoSHIP per l\'import. Al ricevimento a bordo si sceglie l\'ubicazione e, se serve, lo scaffale.', 'Structure from InfoSHIP (MED TOSCANA), replicated on the other vessels.'])) + '</div></section>';
+    return shell('magazzini', crumb([[t('fleet'), '#/']]), L2(['Magazzini', 'Warehouses']) + ' · ' + shipBy(ship).name, body);
+  }
+  CLICK.pladd = function (a) { var w = whOf(a.getAttribute('data-ship')); w.placements.push({ code: 'NUOVA', desc: '', layout: '', default: false }); save(); render(); };
+  CLICK.whcopy = function (a) {
+    var to = a.getAttribute('data-to'), from = a.getAttribute('data-from') || (document.getElementById('whfrom') || {}).value, src = whOf(from); if (!src) return;
+    var nm = shipBy(to).name.replace(/\b\w+/g, function (x) { return x.charAt(0) + x.slice(1).toLowerCase(); }), fnm = shipBy(from).name.replace(/\b\w+/g, function (x) { return x.charAt(0) + x.slice(1).toLowerCase(); });
+    var rp = function (v) { return String(v || '').split(from).join(to).split(fnm).join(nm); };
+    DB.warehouses[to] = { code: rp(src.code), desc: rp(src.desc), central: src.central, side: src.side, placements: src.placements.map(function (p) { return { code: rp(p.code), desc: rp(p.desc), layout: rp(p.layout), default: p.default, cancelled: p.cancelled }; }) };
+    save(); render(); toast(L2(['Struttura copiata da ', 'Structure copied from ']) + from);
+  };
+  function invFor(ship, T) {
+    var s = ((DB.settings || {}).invoiceToShip || {})[ship] || {};
+    return s.name || s.address ? s : T.invoiceTo;
+  }
+  function invoiceSection(T) {
+    var inp = function (path, v, w) { return '<input data-asett="' + path + '" value="' + esc(v || '') + '" style="width:' + w + 'px">'; };
+    var per = (DB.settings || {}).invoiceToShip || {};
+    var rows = DB.ships.map(function (s) { var x = per[s.code] || {}; return '<tr><td><span class="code j">' + s.code + '</span></td><td>' + inp('invoiceToShip.' + s.code + '.name', x.name, 220) + '</td><td>' + inp('invoiceToShip.' + s.code + '.address', x.address, 260) + '</td><td>' + inp('invoiceToShip.' + s.code + '.vat', x.vat, 130) + '</td><td>' + inp('invoiceToShip.' + s.code + '.email', x.email, 190) + '</td></tr>'; }).join('');
+    return '<section class="card stack"><h2>' + esc(L2(['Fatturare a (ordini) · per nave', 'Invoice to (orders) · per vessel'])) + '</h2>' +
+      '<div class="mute" style="font-size:12px">' + esc(L2(['Ogni nave fattura al suo armatore. Se una riga è vuota l\'ordine usa i dati predefiniti.', 'Each vessel invoices its owner. Empty row = default.'])) + '</div>' +
+      '<div class="tablebox"><table class="grid edit"><thead><tr><th>' + esc(t('c_ship')) + '</th><th>' + esc(L2(['Società / armatore', 'Company / owner'])) + '</th><th>' + esc(L2(['Indirizzo di fatturazione', 'Invoice address'])) + '</th><th>' + esc(L2(['P. IVA / VAT', 'VAT no.'])) + '</th><th>' + esc(L2(['Email fatture', 'Invoice email'])) + '</th></tr></thead><tbody>' + rows +
+      '<tr><td class="mute" style="font-size:12px">' + esc(L2(['Predefinito', 'Default'])) + '</td><td>' + inp('invoiceTo.name', T.invoiceTo.name, 220) + '</td><td>' + inp('invoiceTo.address', T.invoiceTo.address, 260) + '</td><td>' + inp('invoiceTo.vat', T.invoiceTo.vat, 130) + '</td><td>' + inp('invoiceTo.email', T.invoiceTo.email, 190) + '</td></tr></tbody></table></div></section>';
+  }
+
   /* ---------- render & events ---------- */
   function render() {
     var r = route(), s = r.seg, html;
@@ -2583,6 +2643,7 @@
     if (!s.length) html = feat('oggi') ? pageToday(r.q) : pageHome();
     else if (s[0] === 'flotta') html = pageHome();
     else if (s[0] === 'proposte') html = pageGeneral();
+    else if (s[0] === 'magazzini') html = pageWarehouses(r.q);
     else if (s[0] === 'spedizione') html = pageShipment(s[1]);
     else if (s[0] === 'nave') html = pageShip(s[1]);
     else if (s[0] === 'docs') html = pageDocs(r.q);
@@ -2671,6 +2732,10 @@
   });
   root.addEventListener('change', function (e) {
     var el = e.target;
+    if (el.getAttribute('data-whf') || el.getAttribute('data-whc')) { var wp = (el.getAttribute('data-whf') || el.getAttribute('data-whc')).split('|'), ww = whOf(wp[0]); if (ww) { ww[wp[1]] = el.type === 'checkbox' ? el.checked : el.value.trim(); save(); toast(L2(['Salvato', 'Saved'])); } return; }
+    if (el.getAttribute('data-plf')) { var pp = el.getAttribute('data-plf').split('|'), pw = whOf(pp[0]); if (pw) { pw.placements[+pp[1]][pp[2]] = el.value.trim(); save(); toast(L2(['Salvato', 'Saved'])); } return; }
+    if (el.getAttribute('data-pldef')) { var pd = el.getAttribute('data-pldef').split('|'), dw = whOf(pd[0]); dw.placements.forEach(function (x, k) { x.default = k === +pd[1]; }); save(); render(); return; }
+    if (el.getAttribute('data-plcan')) { var pc2 = el.getAttribute('data-plcan').split('|'), cw = whOf(pc2[0]); cw.placements[+pc2[1]].cancelled = el.checked; save(); render(); return; }
     if (el.getAttribute('data-aset')) { aset(el.getAttribute('data-aset'), parseNum(el.value)); toast(L2(['Parametro salvato', 'Parameter saved'])); return; }
     if (el.getAttribute('data-asett')) { aset(el.getAttribute('data-asett'), el.value.trim()); toast(L2(['Parametro salvato', 'Parameter saved'])); return; }
     if (el.getAttribute('data-shpcost')) { var sp = shpById(route().seg[1]); if (sp) { var kk = el.getAttribute('data-shpcost'), am = parseNum(el.value); sp.costs = (sp.costs || []).filter(function (c) { return c.kind !== kk; }); if (am) sp.costs.push({ kind: kk, amount: am }); sp.log.push({ at: TODAY, to: sp.status, txt: L2(['Costo ', 'Cost ']) + kk + ' ' + nf(am) + ' €' }); save(); render(); } return; }
@@ -2721,6 +2786,7 @@
   });
 
   DB.docs.forEach(function (d) { if (!d.log) d.log = []; });
+  if (!DB.warehouses && window.SEED.warehouses) { DB.warehouses = clone(window.SEED.warehouses); save(); }
   DB.settings = DB.settings || {};
   if (!DB.settings.approval) DB.settings.approval = { auto: 2500, mgr: 'Direttore tecnico', mgrMax: 25000, top: 'Armatore' };
   if (!DB.settings.landed) DB.settings.landed = { EU: { pct: 4, min: 60 }, EXTRA: { pct: 8, min: 150 }, ASIA: { pct: 11, min: 250 }, hub: 90, customs: 3 };
