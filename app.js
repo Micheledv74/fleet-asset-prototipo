@@ -252,7 +252,9 @@
       railLink('#/', 'fleet', t('fleet'), active === 'home' || active === 'ship') +
       railLink('#/docs' + qs({ tipo: 'RQ', nave: ship }), 'cart', t('purchasing'), active === 'docs' || active === 'doc') +
       railLink('#/modulo/pms', 'gear', t('pms'), active === 'pms') +
+      railLink('#/logistica' + qs({ nave: ship }), 'cal', L2(['Logistica', 'Logistics']), active === 'logistica') +
       railLink('#/magazzino' + qs({ nave: ship || 'PEP' }), 'box', t('stores'), active === 'magazzino') +
+      railLink('#/documenti', 'doc', L2(['Documentazione', 'Documentation']), active === 'documenti') +
       railLink('#/modulo/certificati', 'doc', t('certs'), active === 'certificati') +
       railLink('#/scadenze' + qs({ nave: ship }), 'cal', t('due'), active === 'scadenze') +
       railLink('#/budget' + qs({ nave: ship || 'PEP' }), 'chart', t('budget'), active === 'budget') +
@@ -465,7 +467,7 @@
       (d.type === 'PO' && d.account ? '<dt>' + esc(L2(['Conto di budget', 'Budget account'])) + '</dt><dd class="j">' + esc(d.account) + '</dd>' : '') +
       (d.type === 'DN' && d.route ? '<dt>' + esc(L2(['Percorso', 'Route'])) + '</dt><dd>' + esc(d.route === 'hub' ? L2(['Via hub', 'Via hub']) + ' · ' + d.hub : L2(['Diretta a bordo', 'Direct on board'])) + (d.port ? ' → ' + esc(d.port) : '') + '</dd>' : '') +
       '<dt>' + esc(d.type === 'FT' ? L2(['N. fattura fornitore', 'Supplier invoice no.']) : t('c_orig')) + '</dt><dd class="j">' + esc(d.orig || '—') + '</dd></dl></section>';
-    var lines = (linesOpen(d) && !(UI.edit && UI.edit.id === d.id) && !d.lines.length) ? '<section class="card stack"><h2>' + esc(t('lines')) + '</h2><div class="note">' + esc(L2(['Nessuna riga. Premi Modifica per aggiungere gli articoli.', 'No rows. Press Edit to add items.'])) + '</div></section>' : editable(d) ? rqEditor(d) + comparison(d) : (UI.edit && UI.edit.id === d.id && d.type === 'PO' && d.lines) ? poEditor(d) : d.lines ? linesTable(d) + (d.type === 'RQ' ? comparison(d) : '') : '<section class="card stack"><h2>' + esc(t('lines')) + '</h2><div class="note">' + esc(t('noLines')) + '</div></section>';
+    var lines = (linesOpen(d) && !(UI.edit && UI.edit.id === d.id) && !d.lines.length) ? '<section class="card stack"><h2>' + esc(t('lines')) + '</h2><div class="note">' + esc(L2(['Nessuna riga. Premi Modifica per aggiungere gli articoli.', 'No rows. Press Edit to add items.'])) + '</div></section>' : editable(d) ? rqEditor(d) + comparison(d) : (UI.edit && UI.edit.id === d.id && d.type === 'PO' && d.lines) ? poEditor(d) : (UI.edit && UI.edit.id === d.id && d.type === 'RFQ' && d.status === 'quotata' && d.lines && d.lines.length) ? rfqEditor(d) : d.lines ? linesTable(d) + (d.type === 'RQ' ? comparison(d) : '') : '<section class="card stack"><h2>' + esc(t('lines')) + '</h2><div class="note">' + esc(t('noLines')) + '</div></section>';
 
     // chain
     var rt = chainRoot(d), chainRows = [];
@@ -507,7 +509,7 @@
       (UI.edit && UI.edit.id === d.id ? '' : '<button class="btn sm" data-act="editstart">' + esc(L2(['Modifica', 'Edit'])) + '</button>') + '</div>' +
       (UI.edit && UI.edit.id === d.id ? editHeader(d) : '<h1 class="h1">' + esc(d.desc || '—') + '</h1>' + (d.note ? '<div class="note">' + esc(d.note) + '</div>' : '')) + '</div>';
     var body = '<div class="row">' + pathHtml +
-      '<div class="grow stack" style="gap:14px">' + head + info + lines + '</div>' +
+      '<div class="grow stack" style="gap:14px">' + head + (d.type === 'DN' ? logisticsCard(d) : '') + info + lines + ({ RQ: 1, RFQ: 1, PO: 1, DN: 1, FT: 1 }[d.type] ? attSection(d) : '') + '</div>' +
       '<aside class="side">' + nextHtml + '<section class="card stack"><h2>' + esc(t('chain')) + '</h2><div class="chain">' + chainHtml + '</div></section>' +
       '<section class="card stack"><h2>' + esc(t('history')) + '</h2><div class="log">' + log + '</div></section></aside></div>';
     return shell('doc', crumb([[t('fleet'), '#/'], [shipBy(d.ship).name, '#/nave/' + d.ship], [t(d.type), '#/docs' + qs({ tipo: d.type, nave: d.ship })]]), t(d.type + '1') + ' ' + d.num, body);
@@ -822,17 +824,19 @@
     var acts = P.seat === 'ship'
       ? '<button class="btn pri" data-act="consume" data-item="' + id + '" data-ship="' + ship + '"' + (s.qty > 0 ? '' : ' disabled') + '>' + esc(t('st_consume')) + '</button><button class="btn" data-act="count" data-item="' + id + '" data-ship="' + ship + '">' + esc(t('st_count')) + '</button>'
       : '<span class="mute" style="font-size:13px">' + esc(t('onlyShipAct')) + ': ' + esc(t('st_consume')).toLowerCase() + ', ' + esc(t('st_count')).toLowerCase() + '</span><button class="btn" data-act="seat">' + esc(t('toShipSeat')) + '</button>';
-    var body = '<div class="stack" style="gap:6px"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' + (it.impa ? '<span class="chip c-info j">IMPA ' + esc(it.impa) + '</span>' : '<span class="chip c-warn">GI0001 · ' + esc(P.lang === 'en' ? 'generic code' : 'codice generico') + '</span>') + '<span class="chip c-neutral">' + esc(it.uom) + '</span></div><h1 class="h1">' + esc(it.desc) + '</h1></div>' +
+    var body = '<div class="stack" style="gap:6px"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' + (it.impa ? '<span class="chip c-info j">IMPA ' + esc(it.impa) + '</span>' : (it.generic ? '<span class="chip c-warn">GI0001 · ' + esc(P.lang === 'en' ? 'generic code' : 'codice generico') + '</span>' : '<span class="chip c-info j">P/N ' + esc(it.pn || it.code || '') + '</span>')) + '<span class="chip c-neutral">' + esc(it.uom) + '</span></div><h1 class="h1">' + esc(it.desc) + '</h1></div>' +
       '<div class="kpis">' + kpiBox(t('st_stock'), nf(s.qty), it.uom + (mn && s.qty < mn ? ' · ' + t('st_under') : ''), mn && s.qty < mn ? 'bad' : 'mute', '#/articolo/' + id + '?nave=' + ship) +
       kpiBox(t('st_incoming'), nf(s.inArr), it.uom, 'mute', '#/docs' + qs({ tipo: 'DN', nave: ship, aperti: 1 })) +
       kpiBox(t('st_avg'), s.qty ? nf(s.val / s.qty) : '—', s.last ? t('st_lastPrice') + ' ' + nf(s.last.price) : '', 'mute', '#/articolo/' + id + '?nave=' + ship) +
       kpiBox(t('st_val'), nf(s.val), '€', 'mute', '#/magazzino' + qs({ nave: ship })) + '</div>' +
       '<div class="filters"><label class="tog">' + esc(t('st_min')) + ' <input class="j" data-act="minstock" data-k="' + ship + '|' + id + '" value="' + (mn ? nf(mn) : '') + '" inputmode="decimal" style="width:80px;border:0;background:transparent;text-align:right" aria-label="' + esc(t('st_min')) + '"></label><span style="flex:1"></span>' + acts + '</div>' +
+      ((it.maker || it.pn) ? '<div class="note" style="color:var(--ink)">' + esc([it.pn ? 'P/N ' + it.pn : '', it.maker, it.model, it.equipment].filter(Boolean).join(' · ')) + '</div>' : '') +
+      (docsForItem(it).length ? '<h2 style="margin:0;font-size:15px">' + esc(L2(['Documentazione tecnica', 'Technical documentation'])) + '</h2><div style="display:flex;gap:8px;flex-wrap:wrap">' + docsForItem(it).map(function (td) { return td.file ? '<button class="btn sm" data-act="opentd" data-id="' + td.id + '">' + esc(td.title) + '</button>' : '<span class="chip c-neutral">' + esc(td.title) + '</span>'; }).join('') + '</div>' : '') +
       '<h2 style="margin:0;font-size:15px">' + esc(t('st_moves')) + '</h2>' + movesTable(s.moves.slice().reverse(), false) +
       '<h2 style="margin:0;font-size:15px">' + esc(t('st_prices')) + '</h2>' +
       (prices.length ? '<div class="tablebox"><table class="grid"><thead><tr><th>' + esc(t('c_date')) + '</th><th>' + esc(t('c_num')) + '</th><th>' + esc(t('c_ship')) + '</th><th>' + esc(t('c_sup')) + '</th><th class="num">' + esc(t('l_qty')) + '</th><th class="num">' + esc(t('l_price')) + '</th><th class="num">' + esc(t('l_disc')) + '</th><th class="num">€ / ' + esc(it.uom) + '</th></tr></thead><tbody>' +
         prices.map(function (p) { return '<tr class="r" data-href="#/doc/' + p.po.id + '"><td class="j">' + fd(p.po.date) + '</td><td class="j">' + esc(p.po.num) + '</td><td>' + COLS.ship.v(p.po) + '</td><td>' + esc(supName(p.po.sup)) + '</td><td class="num j">' + nf(p.l.qty) + '</td><td class="num j">' + money(p.l.price, p.po.cur) + '</td><td class="num j">' + (p.l.d1 ? nf(p.l.d1, 1) + '%' : '') + '</td><td class="num j"><b>' + nf(unitEur(p.po, p.l)) + '</b></td></tr>'; }).join('') + '</tbody></table></div>' : '<div class="empty">—</div>');
-    return shell('magazzino', crumb([[t('fleet'), '#/'], [shipBy(ship).name, '#/nave/' + ship], [t('stores'), '#/magazzino' + qs({ nave: ship })]]), it.impa || 'GI0001', body);
+    return shell('magazzino', crumb([[t('fleet'), '#/'], [shipBy(ship).name, '#/nave/' + ship], [t('stores'), '#/magazzino' + qs({ nave: ship })]]), it.impa || it.pn || 'GI0001', body);
   }
   function nextNum(ship, type) {
     var y = TODAY.slice(0, 4), pre = ship + '/' + y + '/' + type + '/', n = 0;
@@ -969,13 +973,14 @@
     return '<section class="card stack"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><h2>' + esc(t('lines')) + ' <span class="j mute">' + d.lines.length + '</span></h2><span class="mute" style="font-size:12px">' + esc(L2(['Modificabile fino alla richiesta di quotazione · salvataggio automatico', 'Editable until quotations are requested · saved automatically'])) + '</span></div>' +
       '<div class="tablebox"><table class="grid edit"><thead><tr><th>' + esc(t('l_row')) + '</th><th>IMPA</th><th>' + esc(t('c_desc')) + '</th><th>Asset</th><th class="num">' + esc(t('l_qty')) + '</th><th>' + esc(t('l_uom')) + '</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
       '<div class="filters"><input id="additem" list="itemlist" placeholder="' + esc(L2(['Aggiungi da anagrafica: IMPA o descrizione', 'Add from catalogue: IMPA or description'])) + '" style="flex:1;min-width:260px" aria-label="' + esc(L2(['Aggiungi articolo', 'Add item'])) + '"><datalist id="itemlist">' + opts + '</datalist>' +
-      '<button type="button" class="btn" data-act="addline">' + esc(L2(['Aggiungi riga', 'Add row'])) + '</button></div></section>';
+      '<button type="button" class="btn" data-act="addline">' + esc(L2(['Aggiungi riga', 'Add row'])) + '</button><button type="button" class="btn pri" data-act="searchitems">' + esc(L2(['Ricerca avanzata', 'Advanced search'])) + '</button></div></section>';
   }
   function curDoc() { var r = route(); return r.seg[0] === 'doc' ? byId(r.seg[1]) : null; }
   function editLine(el) {
     var d = curDoc(); if (!d || !UI.edit || UI.edit.id !== d.id) return;
     var p = el.getAttribute('data-edit').split('|'), l = d.lines[+p[0]], f = p[1];
-    l[f] = /^(qty|price|d1)$/.test(f) ? Math.max(0, parseNum(el.value)) : el.value.trim();
+    l[f] = el.type === 'checkbox' ? el.checked : f === 'days' ? (el.value.trim() === '' ? null : Math.max(0, parseInt(el.value, 10) || 0)) : /^(qty|price|d1|oqty)$/.test(f) ? Math.max(0, parseNum(el.value)) : el.value.trim();
+    if (d.type === 'RFQ') recalcRfq(d);
     if (f === 'impa') l.code = l.impa;
     if (d.type === 'PO' && /^(qty|price|d1)$/.test(f)) { l.net = Math.round(l.qty * l.price * disc(l) * 100) / 100; d.total = docTotal(d); }
     UI.edit.dirty = true;
@@ -1066,7 +1071,7 @@
           if (!chosen.length || !rows.length) { toast(L2(['Scegli almeno un fornitore e una riga', 'Pick at least one supplier and one row'])); return false; }
           chosen.forEach(function (sid) {
             var sp = supById(sid);
-            newDoc('RFQ', rq.ship, { status: 'creata', desc: rq.desc, sup: sid, cur: sp.cur || 'EUR', fx: fx(), dept: rq.dept, limit: f.elements.limit.value, due: rq.due, demo: rq.demo, from: [rq.id],
+            newDoc('RFQ', rq.ship, { status: 'creata', attachments: JSON.parse(JSON.stringify(rq.attachments || [])), desc: rq.desc, sup: sid, cur: sp.cur || 'EUR', fx: fx(), dept: rq.dept, limit: f.elements.limit.value, due: rq.due, demo: rq.demo, from: [rq.id],
               lines: rq.lines.filter(function (l) { return rows.indexOf(l.row) >= 0; }).map(function (l) { return { row: l.row, src: l.row, item: l.item, code: l.code, impa: l.impa, desc: l.desc, note: l.note, uom: l.uom, qty: l.qty, asset: l.asset }; }) }, rq.num);
           });
           if (rq.status !== 'quotazione') setStatus(rq, 'quotazione', chosen.length + ' RFQ');
@@ -1371,8 +1376,11 @@
     if (al.length !== bl.length) ch.push(L2(['righe ', 'rows ']) + al.length + ' → ' + bl.length);
     bl.forEach(function (l) {
       var o = al.filter(function (x) { return x.row === l.row; })[0]; if (!o) return;
-      ['qty', 'price', 'd1', 'desc', 'impa', 'note', 'due', 'asset', 'uom'].forEach(function (k) { if (String(o[k] == null ? '' : o[k]) !== String(l[k] == null ? '' : l[k])) ch.push(L2(['riga ', 'row ']) + l.row + ' ' + k + (/qty|price|d1/.test(k) ? ' ' + nf(o[k] || 0) + ' → ' + nf(l[k] || 0) : '')); });
+      ['qty', 'price', 'd1', 'desc', 'impa', 'note', 'due', 'asset', 'uom', 'oqty', 'cond', 'origin', 'days', 'quoted'].forEach(function (k) { if (String(o[k] == null ? '' : o[k]) !== String(l[k] == null ? '' : l[k])) ch.push(L2(['riga ', 'row ']) + l.row + ' ' + k + (/qty|price|d1/.test(k) ? ' ' + nf(o[k] || 0) + ' → ' + nf(l[k] || 0) : '')); });
     });
+    ['incoterm', 'place', 'validTo', 'ref'].forEach(function (k) { if (((a.offer || {})[k] || '') !== ((b.offer || {})[k] || '')) ch.push(L2(['offerta ', 'offer ']) + k); });
+    if (JSON.stringify(a.charges || []) !== JSON.stringify(b.charges || [])) ch.push(L2(['spese', 'charges']));
+    if ((a.attachments || []).length !== (b.attachments || []).length) ch.push(L2(['allegati ', 'attachments ']) + (a.attachments || []).length + ' → ' + (b.attachments || []).length);
     return ch;
   }
   function arrivals(ship) { return docs(function (d) { return d.ship === ship && d.type === 'DN' && isOpen(d) && d.lines && d.lines.length; }).sort(function (a, b) { return (a.due || '') < (b.due || '') ? -1 : 1; }); }
@@ -1414,7 +1422,7 @@
     var d = curDoc(); if (!d || !UI.edit) return;
     var ch = diffDoc(UI.edit.snap, d);
     if (!ch.length) { UI.edit = null; render(); toast(L2(['Nessuna modifica', 'No changes'])); return; }
-    if (d.type === 'PO' && d.lines) { d.total = docTotal(d); }
+    if ((d.type === 'PO' || d.type === 'RFQ') && d.lines) { d.total = docTotal(d); }
     var revd = d.type === 'PO' && { inviato: 1, confermato: 1, finalizzato: 1 }[d.status];
     if (revd) { d.rev = (d.rev || 0) + 1; d.needResend = true; }
     d.log = d.log || [];
@@ -1554,12 +1562,12 @@
   }
   function b64utf8(s) { return btoa(unescape(encodeURIComponent(s))).replace(/.{76}/g, '$&\r\n'); }
   function encHeader(s) { return /[^\x20-\x7E]/.test(s) ? '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?=' : s; }
-  function buildEml(to, subj, body, pdfB64, name) {
+  function buildEml(to, subj, body, pdfB64, name, extra) {
     var bd = '----=_FleetAsset_' + Date.now();
     return ['X-Unsent: 1', 'To: ' + to, 'Subject: ' + encHeader(subj), 'MIME-Version: 1.0', 'Content-Type: multipart/mixed; boundary="' + bd + '"', '',
       '--' + bd, 'Content-Type: text/plain; charset="utf-8"', 'Content-Transfer-Encoding: base64', '', b64utf8(body), '',
-      '--' + bd, 'Content-Type: application/pdf; name="' + name + '"', 'Content-Transfer-Encoding: base64', 'Content-Disposition: attachment; filename="' + name + '"', '', pdfB64.replace(/.{76}/g, '$&\r\n'), '',
-      '--' + bd + '--', ''].join('\r\n');
+      '--' + bd, 'Content-Type: application/pdf; name="' + name + '"', 'Content-Transfer-Encoding: base64', 'Content-Disposition: attachment; filename="' + name + '"', '', pdfB64.replace(/.{76}/g, '$&\r\n'), ''].concat([].concat.apply([], (extra || []).map(function (x) { return ['--' + bd, 'Content-Type: ' + (x.type || 'application/octet-stream') + '; name="' + x.name + '"', 'Content-Transfer-Encoding: base64', 'Content-Disposition: attachment; filename="' + x.name + '"', '', x.b64.replace(/.{76}/g, '$&\r\n'), '']; }))).concat([
+      '--' + bd + '--', '']).join('\r\n');
   }
   FORMS.mail = function (d, to) {
     var sh = shipBy(d.ship), rq = d.from && byId(d.from[0]), sp = supById(d.sup) || {};
@@ -1573,6 +1581,7 @@
       '<label>' + esc(L2(['Oggetto', 'Subject'])) + '<input name="subj" value="' + esc(subj) + '"></label>' +
       '<label>' + esc(L2(['Testo', 'Body'])) + '<textarea name="body" rows="9" class="j" style="font-size:12px">' + esc(body) + '</textarea></label>' +
       '<div class="note" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:var(--ink)"><span>' + esc(L2(['Allegato', 'Attachment'])) + ': <b class="j">' + esc(name) + '</b></span><button type="button" class="btn sm" data-pv="1">' + esc(L2(['Anteprima PDF', 'Preview PDF'])) + '</button></div>' +
+      ((d.attachments || []).length ? '<div class="stack" style="gap:4px"><span class="mute" style="font-size:12px">' + esc(L2(['Altri allegati da includere', 'Other attachments to include'])) + '</span>' + d.attachments.map(function (x, i) { return '<label style="flex-direction:row;gap:8px;color:var(--ink);font-size:13px"><input type="checkbox" name="att" value="' + i + '"' + (x.file ? ' checked' : ' disabled') + '> ' + esc(x.name) + ' <span class="mute">' + esc((x.file ? kb(x.file.size) : L2(['file non incluso', 'file not included']))) + '</span></label>'; }).join('') + '</div>' : '') +
       '<div class="mute" style="font-size:12px">' + esc(L2(['"Bozza Outlook" scarica un file .eml: aprilo e Outlook mostra il messaggio pronto con il PDF allegato, da controllare e inviare. Poi torna qui e segna come inviato.', '"Outlook draft" downloads an .eml file: open it and Outlook shows the message ready with the PDF attached. Then mark as sent here.'])) + '</div>',
       function (f) {
         if (f.elements.to.value) sp.email = f.elements.to.value.trim();
@@ -1586,9 +1595,11 @@
           if (e.target.getAttribute('data-pv')) pdfPreview(d);
           if (e.target.getAttribute('data-copy')) { var txt = f.elements.subj.value + '\n\n' + f.elements.body.value; try { navigator.clipboard.writeText(txt).then(function () { toast(L2(['Testo copiato', 'Text copied'])); }, function () { f.elements.body.select(); }); } catch (x) { f.elements.body.select(); } }
           if (e.target.getAttribute('data-eml')) {
-            loadPdfLib().then(function () {
+            var picks = [].map.call(f.querySelectorAll('input[name=att]:checked'), function (c) { return d.attachments[+c.value]; });
+            var extra = [];
+            Promise.all(picks.map(function (x) { return fileBlob(x.file).then(function (b) { return new Promise(function (ok) { var fr = new FileReader(); fr.onload = function () { extra.push({ name: (x.file && x.file.name) || x.name, type: b.type || x.file.type, b64: String(fr.result).split(',')[1] }); ok(); }; fr.readAsDataURL(b); }); }).catch(function () { toast(L2(['Allegato non disponibile: ', 'Attachment not available: ']) + x.name); }); })).then(loadPdfLib).then(function () {
               var pdf = buildPdf(d).output('datauristring').split(',')[1];
-              var eml = buildEml(f.elements.to.value.trim(), f.elements.subj.value, f.elements.body.value.replace(/\n/g, '\r\n'), pdf, name);
+              var eml = buildEml(f.elements.to.value.trim(), f.elements.subj.value, f.elements.body.value.replace(/\n/g, '\r\n'), pdf, name, extra);
               saveBlob(new Blob([eml], { type: 'message/rfc822' }), name.replace(/\.pdf$/, '.eml'));
               d.log = d.log || []; d.log.push({ at: TODAY, to: d.status, txt: L2(['Bozza Outlook creata', 'Outlook draft created']) + ' · ' + name }); save();
               toast(L2(['Bozza scaricata: aprila con Outlook', 'Draft downloaded: open it with Outlook']));
@@ -1647,7 +1658,8 @@
     var ds = DB.docs.filter(function (d) { return matchQ(d, q); }).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
     ds.slice(0, 8).forEach(function (d) { out.push({ k: d.type + ' · ' + d.ship, l: d.num + '  ' + d.desc, h: '#/doc/' + d.id, s: stLabel(d) }); });
     if (ds.length > 8) out.push({ k: '', l: (P.lang === 'en' ? 'All ' : 'Tutti i ') + ds.length + ' ' + t('results') + ' →', h: '#/docs' + qs({ tipo: ds[0].type, q: q }) });
-    var ci = 0; (DB.items || []).forEach(function (it) { if (ci < 4 && ((it.impa || '') + ' ' + it.desc).toUpperCase().indexOf(q) >= 0) { ci++; out.push({ k: t('stores'), l: (it.impa ? it.impa + ' · ' : '') + it.desc, h: '#/articolo/' + it.id + '?nave=PEP' }); } });
+    var ci = 0; (DB.items || []).forEach(function (it) { if (ci < 4 && itemText(it).indexOf(q) >= 0) { ci++; out.push({ k: t('stores'), l: (it.impa ? it.impa + ' · ' : '') + it.desc, h: '#/articolo/' + it.id + '?nave=PEP' }); } });
+    var tc = 0; (DB.techdocs || []).forEach(function (td) { if (tc < 3 && [td.title, td.maker, td.model, (td.refs || []).join(' ')].join(' ').toUpperCase().indexOf(q) >= 0) { tc++; out.push({ k: L2(['Doc. tecnica', 'Tech doc']), l: td.title, h: '#/documenti?q=' + encodeURIComponent(td.refs && td.refs[0] || td.title) }); } });
     var c = 0; DB.accounts.forEach(function (a) { if (a.post && c < 3 && (a.code + ' ' + a.desc).toUpperCase().indexOf(q) >= 0) { c++; out.push({ k: t('acct'), l: a.path + ' · ' + a.desc, h: '#/budget' }); } });
     return out;
   }
@@ -1660,6 +1672,341 @@
       return '<a role="option" href="' + x.h + '" class="' + (i === UI.resSel ? 'sel' : '') + '"><span class="k j">' + esc(x.k) + '</span><span style="flex:1">' + esc(x.l) + '</span>' + (x.s ? '<span class="mute" style="font-size:12px">' + esc(x.s) + '</span>' : '') + '</a>';
     }).join('') : '<a href="#" onclick="return false"><span class="mute">' + esc(t('noResults')) + '</span></a>') + '</div>';
   }
+
+
+  /* ---------- fix: offer editing on quoted RFQ ---------- */
+  function rfqEditor(d) {
+    var o = d.offer || {};
+    var rows = d.lines.map(function (l, i) {
+      return '<tr><td class="j">' + l.row + '</td><td style="min-width:160px">' + esc(l.desc) + '<div class="mute j" style="font-size:11px">' + nf(l.qty) + ' ' + esc(l.uom) + '</div></td>' +
+        '<td><input type="checkbox" data-edit="' + i + '|quoted"' + (l.quoted ? ' checked' : '') + ' aria-label="' + esc(L2(['Quotato', 'Quoted'])) + '"></td>' +
+        '<td><input class="j" data-edit="' + i + '|oqty" value="' + nf(l.oqty || l.qty) + '" inputmode="decimal" style="width:70px;text-align:right"></td>' +
+        '<td><input class="j" data-edit="' + i + '|price" value="' + nf(l.price || 0) + '" inputmode="decimal" style="width:90px;text-align:right"></td>' +
+        '<td><input class="j" data-edit="' + i + '|d1" value="' + nf(l.d1 || 0, 1) + '" inputmode="decimal" style="width:56px;text-align:right"></td>' +
+        '<td><select data-edit="' + i + '|cond">' + CONDS.map(function (c) { return '<option' + (l.cond === c ? ' selected' : '') + '>' + c + '</option>'; }).join('') + '</select></td>' +
+        '<td><input data-edit="' + i + '|origin" value="' + esc(l.origin || '') + '" style="width:120px"></td>' +
+        '<td><input class="j" data-edit="' + i + '|days" value="' + (l.days == null ? '' : l.days) + '" inputmode="numeric" style="width:52px;text-align:right"></td></tr>';
+    }).join('');
+    var ch = function (k) { var c = (d.charges || []).filter(function (x) { return x.kind === k; })[0]; return c ? nf(c.amount) : ''; };
+    return '<section class="card stack"><h2>' + esc(L2(['Offerta del fornitore', 'Supplier offer'])) + '</h2>' +
+      '<div class="note stack" style="gap:8px;color:var(--ink)"><b>' + esc(L2(['Dati comuni a tutte le righe', 'Data common to all rows'])) + '</b><div class="filters">' +
+      '<label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">Incoterm<select data-hoffer="incoterm">' + ['', 'EXW', 'FCA', 'FOB', 'CFR', 'CIF', 'CPT', 'DAP', 'DDP'].map(function (x) { return '<option' + (o.incoterm === x ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></label>' +
+      '<label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">' + esc(L2(['Luogo di resa', 'Place'])) + '<input data-hoffer="place" value="' + esc(o.place || '') + '"></label>' +
+      '<label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">' + esc(L2(['Valida fino al', 'Valid until'])) + '<input type="date" data-hoffer="validTo" value="' + esc(o.validTo || '') + '"></label>' +
+      '<label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">' + esc(t('extRef')) + '<input data-hoffer="ref" value="' + esc(o.ref || '') + '"></label></div><div class="filters">' +
+      '<label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">' + esc(L2(['Lead time (gg)', 'Lead time (days)'])) + '<input id="rm_days" inputmode="numeric" style="width:70px"></label>' +
+      '<label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">' + esc(L2(['Condizione', 'Condition'])) + '<select id="rm_cond"><option value="">—</option>' + CONDS.map(function (c) { return '<option>' + c + '</option>'; }).join('') + '</select></label>' +
+      '<label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">' + esc(L2(['Origine / stock', 'Origin / stock'])) + '<input id="rm_orig"></label>' +
+      '<label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">' + esc(t('l_disc')) + ' %<input id="rm_disc" inputmode="decimal" style="width:60px"></label>' +
+      '<button type="button" class="btn" data-act="rfqmass" style="align-self:flex-end">' + esc(L2(['Applica a tutte le righe', 'Apply to all rows'])) + '</button></div></div>' +
+      '<div class="tablebox"><table class="grid edit" style="min-width:880px"><thead><tr><th>' + esc(t('l_row')) + '</th><th>' + esc(t('c_desc')) + '</th><th>' + esc(L2(['Quot.', 'Quoted'])) + '</th><th class="num">' + esc(L2(['Q.tà off.', 'Qty off.'])) + '</th><th class="num">' + esc(L2(['Prezzo unit.', 'Unit price'])) + ' ' + esc(d.cur || '') + '</th><th class="num">' + esc(t('l_disc')) + ' %</th><th>' + esc(L2(['Condizione', 'Condition'])) + '</th><th>' + esc(L2(['Origine / stock', 'Origin / stock'])) + '</th><th class="num">LT</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<div class="filters">' + ['transport', 'packing', 'other'].map(function (k) { return '<label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">' + esc(t('ch_' + k)) + '<input data-hch="' + k + '" value="' + ch(k) + '" inputmode="decimal" style="width:100px;text-align:right"></label>'; }).join('') + '</div></section>';
+  }
+  function recalcRfq(d) { d.lines.forEach(function (l) { l.net = l.quoted ? Math.round((l.oqty || l.qty) * (l.price || 0) * disc(l) * 100) / 100 : 0; }); d.total = docTotal(d); }
+  CLICK.searchitems = function () { var d = curDoc(); if (d && UI.edit && UI.edit.id === d.id) FORMS.search(d); };
+  CLICK.rfqmass = function () {
+    var d = curDoc(); if (!d || !UI.edit || UI.edit.id !== d.id) return;
+    var dy = document.getElementById('rm_days').value, cd = document.getElementById('rm_cond').value, og = document.getElementById('rm_orig').value.trim(), dc = document.getElementById('rm_disc').value;
+    d.lines.forEach(function (l) { if (dy !== '') l.days = parseInt(dy, 10); if (cd) l.cond = cd; if (og) l.origin = og; if (dc !== '') l.d1 = parseNum(dc); });
+    recalcRfq(d); UI.edit.dirty = true; render(); toast(L2(['Applicato a tutte le righe', 'Applied to all rows']));
+  };
+
+  /* ---------- group C: catalogue search, technical documents, attachments ---------- */
+  var IDB = null;
+  function idb() {
+    if (IDB) return IDB;
+    IDB = new Promise(function (ok, ko) { try { var r = indexedDB.open('fa_files', 1); r.onupgradeneeded = function () { r.result.createObjectStore('files'); }; r.onsuccess = function () { ok(r.result); }; r.onerror = function () { ko(r.error); }; } catch (e) { ko(e); } });
+    return IDB;
+  }
+  function idbPut(key, blob) { return idb().then(function (db) { return new Promise(function (ok, ko) { var tx = db.transaction('files', 'readwrite'); tx.objectStore('files').put(blob, key); tx.oncomplete = ok; tx.onerror = function () { ko(tx.error); }; }); }); }
+  function idbGet(key) { return idb().then(function (db) { return new Promise(function (ok, ko) { var rq = db.transaction('files').objectStore('files').get(key); rq.onsuccess = function () { ok(rq.result); }; rq.onerror = function () { ko(rq.error); }; }); }); }
+  function fileBlob(f) {
+    if (!f) return Promise.reject(new Error('no file'));
+    if (f.src === 'idb') return idbGet(f.key).then(function (b) { if (!b) throw new Error('missing'); return b; });
+    if (f.path) return fetch(f.path).then(function (r) { if (!r.ok) throw new Error('missing'); return r.blob(); });
+    return Promise.reject(new Error('no file'));
+  }
+  function kb(n) { return n ? (n > 1048576 ? nf(n / 1048576, 1) + ' MB' : Math.round(n / 1024) + ' KB') : ''; }
+  function docsForItem(it) {
+    if (!it) return [];
+    var pn = (it.pn || it.code || '').toUpperCase(), model = (it.model || '').toUpperCase();
+    return (DB.techdocs || []).filter(function (td) {
+      return (it.docs || []).indexOf(td.id) >= 0 || (td.refs || []).some(function (r) { r = r.toUpperCase(); return (pn && pn.indexOf(r) === 0) || (model && model === r); });
+    });
+  }
+  function itemText(it) { return [it.impa, it.code, it.pn, it.desc, it.maker, it.model, it.equipment, it.note].filter(Boolean).join(' ').toUpperCase(); }
+  function stockAll(itemId) {
+    var out = {}; DB.ships.forEach(function (s) { var x = stockOf(s.code)[itemId]; if (x && (x.qty || x.inArr)) out[s.code] = x; }); return out;
+  }
+  function searchItems(q, f) {
+    var words = q.toUpperCase().split(/\s+/).filter(Boolean);
+    return (DB.items || []).filter(function (it) {
+      var tx = itemText(it);
+      if (words.some(function (w) { return tx.indexOf(w) < 0; })) return false;
+      if (f.maker && (it.maker || '') !== f.maker) return false;
+      if (f.equip && (it.equipment || '') !== f.equip) return false;
+      return true;
+    }).slice(0, 60);
+  }
+  function uniq(a) { var o = {}; a.forEach(function (x) { if (x) o[x] = 1; }); return Object.keys(o).sort(); }
+  FORMS.search = function (d) {
+    var makers = uniq((DB.items || []).map(function (i) { return i.maker; })), equips = uniq((DB.items || []).map(function (i) { return i.equipment; }));
+    var sel = {};
+    function results(f) {
+      var q = f.elements.q.value.trim();
+      if (q.length < 2 && !f.elements.maker.value && !f.elements.equip.value) return '<div class="mute" style="padding:10px">' + esc(L2(['Scrivi almeno due caratteri: IMPA, part number, descrizione, maker, modello o equipaggiamento.', 'Type at least two characters: IMPA, part number, description, maker, model or equipment.'])) + '</div>';
+      var res = searchItems(q, { maker: f.elements.maker.value, equip: f.elements.equip.value });
+      if (!res.length) return '<div class="mute" style="padding:10px">' + esc(t('noResults')) + '</div>';
+      return '<table class="grid edit" style="min-width:900px"><thead><tr><th></th><th>IMPA / P/N</th><th>' + esc(t('c_desc')) + '</th><th>Maker / ' + esc(L2(['equipaggiamento', 'equipment'])) + '</th><th>' + esc(L2(['Giacenza per nave', 'Stock per vessel'])) + '</th><th>' + esc(L2(['Ultimo prezzo', 'Last price'])) + '</th><th>Doc</th><th class="num">' + esc(t('l_qty')) + '</th></tr></thead><tbody>' +
+        res.map(function (it) {
+          var st = stockAll(it.id), stTxt = Object.keys(st).map(function (k) { return k + ' ' + nf(st[k].qty, 0) + (st[k].inArr ? ' (+' + nf(st[k].inArr, 0) + ')' : ''); }).join(' · ') || '—';
+          var last = null; DB.ships.forEach(function (s) { var x = stockOf(s.code)[it.id]; if (x && x.last && (!last || x.last.date > last.date)) last = x.last; });
+          var nd = docsForItem(it).length;
+          return '<tr><td><input type="checkbox" data-pick="' + it.id + '"' + (sel[it.id] ? ' checked' : '') + ' aria-label="' + esc(it.desc) + '"></td><td class="j" style="font-size:12px">' + esc(it.impa || it.pn || it.code || '') + '</td><td>' + esc(it.desc) + (it.note ? '<div class="mute" style="font-size:11px">' + esc(it.note) + '</div>' : '') + '</td>' +
+            '<td style="font-size:12px">' + esc([it.maker, it.model].filter(Boolean).join(' ') || '—') + (it.equipment ? '<div class="mute">' + esc(it.equipment) + '</div>' : '') + '</td><td class="j" style="font-size:12px">' + esc(stTxt) + '</td>' +
+            '<td class="j" style="font-size:12px">' + (last ? nf(last.price) + ' € · ' + esc(supName(last.sup)) : '—') + '</td><td class="j">' + (nd ? '<span class="chip c-info">' + nd + '</span>' : '') + '</td>' +
+            '<td><input data-pq="' + it.id + '" value="' + (sel[it.id] || 1) + '" inputmode="decimal" style="width:60px;text-align:right"></td></tr>';
+        }).join('') + '</tbody></table>';
+    }
+    var form = formModal(L2(['Ricerca articoli', 'Item search']) + ' · ' + d.num,
+      '<div class="filters"><input name="q" type="search" placeholder="' + esc(L2(['es. 50801-07H, roller, IMPA 190101, L23/30H', 'e.g. 50801-07H, roller, IMPA 190101, L23/30H'])) + '" style="flex:2;min-width:260px" aria-label="' + esc(t('search')) + '">' +
+      '<select name="maker" aria-label="Maker"><option value="">' + esc(L2(['Tutti i maker', 'All makers'])) + '</option>' + makers.map(function (m) { return '<option>' + esc(m) + '</option>'; }).join('') + '</select>' +
+      '<select name="equip" aria-label="Equipment"><option value="">' + esc(L2(['Tutti gli equipaggiamenti', 'All equipment'])) + '</option>' + equips.map(function (m) { return '<option>' + esc(m) + '</option>'; }).join('') + '</select></div>' +
+      '<div id="sres" class="tablebox" style="max-height:52vh;overflow:auto"></div><div class="mute" style="font-size:12px" id="scount"></div>',
+      function (f) {
+        var ids = Object.keys(sel); if (!ids.length) { toast(L2(['Nessun articolo selezionato', 'No item selected'])); return false; }
+        var row = d.lines.reduce(function (m, l) { return Math.max(m, l.row); }, 0), props = [];
+        ids.forEach(function (id) {
+          var it = itemById(id); row += 10;
+          d.lines.push({ row: row, item: it.id, code: it.code, impa: it.impa || '', desc: it.desc, note: [it.pn && it.pn !== it.impa ? 'P/N ' + it.pn : '', it.note].filter(Boolean).join(' · '), uom: it.uom || 'PCE', qty: sel[id] || 1, asset: it.equipment || '' });
+          docsForItem(it).forEach(function (td) { if (!props.some(function (p) { return p.td.id === td.id; }) && !(d.attachments || []).some(function (a) { return a.td === td.id; })) props.push({ td: td, it: it }); });
+        });
+        UI.edit.dirty = true; render(); toast(ids.length + ' ' + L2(['righe aggiunte', 'rows added']));
+        if (props.length) setTimeout(function () { proposeDocs(d, props); }, 50);
+      }, { w: 1100, ok: L2(['Aggiungi alla richiesta', 'Add to requisition']),
+        onInput: function (e, f) {
+          if (e.target.getAttribute('data-pick')) { var id = e.target.getAttribute('data-pick'); if (e.target.checked) sel[id] = parseNum(f.querySelector('[data-pq="' + id + '"]').value) || 1; else delete sel[id]; f.querySelector('#scount').textContent = Object.keys(sel).length + ' ' + L2(['selezionati', 'selected']); return; }
+          if (e.target.getAttribute('data-pq')) { var k = e.target.getAttribute('data-pq'); if (sel[k] != null) sel[k] = parseNum(e.target.value) || 1; return; }
+          f.querySelector('#sres').innerHTML = results(f);
+        } });
+    form.querySelector('#sres').innerHTML = results(form);
+  };
+  function proposeDocs(d, props) {
+    formModal(L2(['Documentazione tecnica trovata', 'Technical documents found']),
+      '<div class="mute" style="font-size:13px">' + esc(L2(['Questi documenti sono collegati agli articoli aggiunti. Allegali alla richiesta: passeranno alle RFQ e alle email ai fornitori.', 'These documents are linked to the items added. Attach them to the requisition: they pass to RFQs and supplier emails.'])) + '</div>' +
+      props.map(function (p, i) { return '<label style="flex-direction:row;gap:8px;color:var(--ink);align-items:flex-start"><input type="checkbox" name="pd" value="' + i + '" checked> <span><b>' + esc(p.td.title) + '</b><br><span class="mute" style="font-size:12px">' + esc(p.td.kind) + ' · ' + esc(L2(['da', 'from'])) + ' ' + esc(p.it.desc) + (p.td.file ? ' · ' + kb(p.td.file.size) : ' · ' + L2(['file non disponibile in questa versione', 'file not available in this version'])) + '</span></span></label>'; }).join(''),
+      function (f) {
+        d.attachments = d.attachments || [];
+        [].forEach.call(f.querySelectorAll('input[name=pd]:checked'), function (c) { var p = props[+c.value]; d.attachments.push({ id: 'A-' + Date.now() + '-' + c.value, name: p.td.title, kind: p.td.kind, td: p.td.id, file: p.td.file || null, from: p.it.desc, auto: true }); });
+        if (UI.edit && UI.edit.id === d.id) UI.edit.dirty = true; else save();
+        render();
+      }, { ok: L2(['Allega selezionati', 'Attach selected']) });
+  }
+  function attSection(d) {
+    var a = d.attachments || [], ed = UI.edit && UI.edit.id === d.id;
+    return '<section class="card stack"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2>' + esc(L2(['Allegati', 'Attachments'])) + ' <span class="j mute">' + a.length + '</span></h2>' +
+      '<label class="btn sm">' + esc(L2(['Aggiungi file', 'Add file'])) + '<input type="file" multiple hidden data-act="attach"></label></div>' +
+      (a.length ? '<div class="stack" style="gap:6px">' + a.map(function (x, i) {
+        return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:6px"><span class="chip ' + (x.auto ? 'c-info' : 'c-neutral') + '">' + esc(x.kind || 'File') + '</span><button class="btn ghost sm" data-act="openatt" data-i="' + i + '" style="text-decoration:underline;color:var(--teal)">' + esc(x.name) + '</button>' +
+          '<span class="mute" style="font-size:12px">' + esc(x.auto ? L2(['collegato a ', 'linked to ']) + (x.from || '') : L2(['caricato a mano', 'uploaded manually'])) + (x.file && x.file.size ? ' · ' + kb(x.file.size) : '') + (x.file ? '' : ' · ' + L2(['file non incluso', 'file not included'])) + '</span>' +
+          (ed ? '<button class="btn sm ghost" data-act="delatt" data-i="' + i + '" aria-label="remove">✕</button>' : '') + '</div>';
+      }).join('') + '</div>' : '<div class="mute" style="font-size:13px">' + esc(L2(['Nessun allegato. Aggiungi foto, tavole o specifiche; dalla ricerca articoli il prototipo propone i documenti collegati.', 'No attachments. Add photos, plates or specs; item search proposes linked documents.'])) + '</div>') + '</section>';
+  }
+  function openFile(file, name) {
+    fileBlob(file).then(function (b) {
+      var u = URL.createObjectURL(b), img = /^image\//.test(b.type) || /\.(jpe?g|png)$/i.test(name || '');
+      var bg = document.createElement('div'); bg.className = 'modal-bg';
+      bg.innerHTML = '<div class="modal" style="width:min(1000px,100%);height:92vh" role="dialog" aria-modal="true" aria-label="' + esc(name) + '"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3>' + esc(name) + '</h3><span style="display:flex;gap:8px"><button class="btn" data-dl="1">' + esc(L2(['Scarica', 'Download'])) + '</button><button class="btn" data-x="1">' + esc(t('close')) + '</button></span></div>' +
+        (img ? '<div style="flex:1;overflow:auto;text-align:center"><img src="' + u + '" alt="' + esc(name) + '" style="max-width:100%"></div>' : '<iframe title="' + esc(name) + '" src="' + u + '" style="flex:1;width:100%;border:1px solid var(--line);border-radius:8px;background:#fff"></iframe>') + '</div>';
+      document.body.appendChild(bg);
+      bg.addEventListener('click', function (e) { if (e.target === bg || e.target.getAttribute('data-x')) { bg.remove(); URL.revokeObjectURL(u); } if (e.target.getAttribute('data-dl')) saveBlob(b, (file && file.name) || name); });
+    }).catch(function () { toast(L2(['File non disponibile in questa versione', 'File not available in this version'])); });
+  }
+  CLICK.openatt = function (a) { var d = curDoc(); var x = d && (d.attachments || [])[+a.getAttribute('data-i')]; if (x) openFile(x.file, x.name); };
+  CLICK.delatt = function (a) { var d = curDoc(); if (!d || !UI.edit || UI.edit.id !== d.id) return; d.attachments.splice(+a.getAttribute('data-i'), 1); UI.edit.dirty = true; render(); };
+  CLICK.opentd = function (a) { var td = (DB.techdocs || []).filter(function (x) { return x.id === a.getAttribute('data-id'); })[0]; if (td) openFile(td.file, td.title); };
+  function uploadFiles(files, cb) {
+    var arr = [].slice.call(files || []), out = [];
+    (function next(i) {
+      if (i >= arr.length) { cb(out); return; }
+      var f = arr[i], key = 'F-' + Date.now() + '-' + i;
+      idbPut(key, f).then(function () { out.push({ src: 'idb', key: key, name: f.name, size: f.size, type: f.type }); next(i + 1); }).catch(function () { toast(L2(['Impossibile salvare il file nel browser', 'Cannot store the file in the browser'])); next(i + 1); });
+    })(0);
+  }
+  function guessKind(n) { return /\.(jpe?g|png|heic)$/i.test(n) ? L2(['Foto', 'Photo']) : /\.pdf$/i.test(n) ? 'PDF' : 'File'; }
+  function pageLibrary(q) {
+    var list = (DB.techdocs || []).filter(function (td) { return !q.q || [td.title, td.kind, td.maker, td.model, td.equipment, (td.refs || []).join(' ')].join(' ').toUpperCase().indexOf(q.q.toUpperCase()) >= 0; });
+    var body = '<div class="filters"><input type="search" data-filter="q" value="' + esc(q.q || '') + '" placeholder="' + esc(L2(['Cerca per titolo, maker, modello, riferimento tavola', 'Search title, maker, model, plate reference'])) + '" style="flex:1"><button class="btn pri sm" data-act="newtd">' + esc(L2(['Aggiungi documento', 'Add document'])) + '</button></div>' +
+      (list.length ? '<div class="tablebox"><table class="grid"><thead><tr><th>' + esc(L2(['Documento', 'Document'])) + '</th><th>' + esc(L2(['Tipo', 'Type'])) + '</th><th>Maker / ' + esc(L2(['modello', 'model'])) + '</th><th>' + esc(L2(['Equipaggiamento', 'Equipment'])) + '</th><th>' + esc(L2(['Riferimenti', 'References'])) + '</th><th>' + esc(L2(['Articoli collegati', 'Linked items'])) + '</th><th></th></tr></thead><tbody>' +
+        list.map(function (td) {
+          var n = (DB.items || []).filter(function (it) { return docsForItem(it).indexOf(td) >= 0; }).length;
+          return '<tr><td><b>' + esc(td.title) + '</b>' + (td.file && td.file.size ? '<div class="mute" style="font-size:11px">' + esc(td.file.name || '') + ' · ' + kb(td.file.size) + '</div>' : '') + '</td><td>' + esc(td.kind) + '</td><td>' + esc([td.maker, td.model].filter(Boolean).join(' ')) + '</td><td>' + esc(td.equipment || '') + (td.ships ? '<div class="mute" style="font-size:11px">' + esc(td.ships.join(', ')) + '</div>' : '') + '</td><td class="j" style="font-size:12px">' + esc((td.refs || []).join(', ')) + '</td><td class="num j">' + n + '</td><td>' + (td.file ? '<button class="btn sm" data-act="opentd" data-id="' + td.id + '">' + esc(L2(['Apri', 'Open'])) + '</button>' : '<span class="mute" style="font-size:12px">' + esc(L2(['file non incluso', 'file not included'])) + '</span>') + '</td></tr>';
+        }).join('') + '</tbody></table></div>' : '<div class="empty">' + esc(t('noResults')) + '</div>') +
+      '<div class="note">' + esc(L2(['Un documento si collega agli articoli il cui part number inizia con uno dei riferimenti (es. 50801-07H) o con lo stesso modello. Nel prototipo i file caricati restano in questo browser; nella versione definitiva staranno su server o SharePoint.', 'A document links to items whose part number starts with one of its references (e.g. 50801-07H) or with the same model. In the prototype uploaded files stay in this browser.'])) + '</div>';
+    return shell('documenti', crumb([[t('fleet'), '#/']]), L2(['Documentazione tecnica', 'Technical documentation']), body);
+  }
+  CLICK.newtd = function () {
+    var form = formModal(L2(['Nuovo documento tecnico', 'New technical document']),
+      '<label>' + esc(L2(['Titolo', 'Title'])) + '<input name="title" required></label>' +
+      '<div class="filters"><label>' + esc(L2(['Tipo', 'Type'])) + '<select name="kind"><option>' + esc(L2(['Tavola ricambi', 'Parts plate'])) + '</option><option>' + esc(L2(['Manuale', 'Manual'])) + '</option><option>' + esc(L2(['Scheda tecnica', 'Data sheet'])) + '</option><option>' + esc(L2(['Catalogo', 'Catalogue'])) + '</option><option>' + esc(L2(['Certificato', 'Certificate'])) + '</option></select></label><label>Maker<input name="maker"></label><label>' + esc(L2(['Modello', 'Model'])) + '<input name="model"></label></div>' +
+      '<label>' + esc(L2(['Equipaggiamento', 'Equipment'])) + '<input name="equipment"></label>' +
+      '<label>' + esc(L2(['Riferimenti (part number o prefissi, separati da virgola)', 'References (part numbers or prefixes, comma separated)'])) + '<input name="refs" placeholder="50801-07H, 50705-17H"></label>' +
+      '<label>' + esc(L2(['File', 'File'])) + '<input type="file" name="file" required></label>',
+      function (f) {
+        var fl = f.elements.file.files;
+        uploadFiles(fl, function (out) {
+          DB.techdocs = DB.techdocs || [];
+          DB.techdocs.push({ id: 'TD-' + Date.now(), title: f.elements.title.value.trim(), kind: f.elements.kind.value, maker: f.elements.maker.value.trim(), model: f.elements.model.value.trim(), equipment: f.elements.equipment.value.trim(), refs: f.elements.refs.value.split(',').map(function (x) { return x.trim(); }).filter(Boolean), file: out[0] || null });
+          save(); render(); toast(L2(['Documento aggiunto', 'Document added']));
+        });
+      }, { w: 640, ok: L2(['Salva', 'Save']) });
+  };
+
+  /* ---------- group D: logistics and tracking ---------- */
+  var STAGES = [
+    ['prep', ['In preparazione dal fornitore', 'In preparation at supplier'], 'pronta'],
+    ['pronta', ['Pronta, ok alla spedizione', 'Ready, cleared to ship'], 'pronta'],
+    ['ferma', ['Ferma dal fornitore', 'On hold at supplier'], 'pronta'],
+    ['verso_hub', ['Spedita verso hub', 'Shipped to hub'], 'hub'],
+    ['in_hub', ['In hub spedizioniere', 'At forwarder hub'], 'hub'],
+    ['verso_porto', ['Spedita al porto d\'imbarco', 'Shipped to port of loading'], 'spedita'],
+    ['agente', ['Presso agente al porto', 'With port agent'], 'spedita'],
+    ['verso_bordo', ['In consegna a bordo', 'Being delivered on board'], 'spedita'],
+    ['a_bordo', ['A bordo', 'On board'], 'ricevuta']
+  ];
+  var CARRIERS = {
+    'DHL Express': 'https://www.dhl.com/it-it/home/tracciamento.html?tracking-id=',
+    'FedEx': 'https://www.fedex.com/fedextrack/?trknbr=',
+    'UPS': 'https://www.ups.com/track?tracknum=',
+    'TNT': 'https://www.tnt.com/express/it_it/site/shipping-tools/tracking.html?searchType=con&cons=',
+    'Maersk': 'https://www.maersk.com/tracking/',
+    'MSC': 'https://www.msc.com/en/track-a-shipment?trackingNumber=',
+    'Spedizioniere / hub': '',
+    'Altro': ''
+  };
+  function stageOf(d) {
+    if (d.track && d.track.stage) return d.track.stage;
+    return { pronta: 'pronta', hub: 'in_hub', spedita: 'verso_bordo', ricevuta: 'a_bordo' }[d.status] || 'prep';
+  }
+  function stageIdx(k) { for (var i = 0; i < STAGES.length; i++) if (STAGES[i][0] === k) return i; return 0; }
+  function url17(n) { return 'https://t.17track.net/it#nums=' + encodeURIComponent(n.replace(/\s+/g, '')); }
+  var MON = { gen: 1, jan: 1, feb: 2, mar: 3, apr: 4, mag: 5, may: 5, giu: 6, jun: 6, lug: 7, jul: 7, ago: 8, aug: 8, set: 9, sep: 9, ott: 10, oct: 10, nov: 11, dic: 12, dec: 12 };
+  function parseStamp(l) {
+    var m, y = +TODAY.slice(0, 4);
+    if ((m = l.match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/))) return { at: m[1] + '-' + m[2] + '-' + m[3] + ' ' + m[4] + ':' + m[5], rest: l.replace(m[0], '') };
+    if ((m = l.match(/(\d{1,2})[\/.](\d{1,2})[\/.](\d{2,4})\s+(\d{1,2}):(\d{2})/))) { var yy = m[3].length === 2 ? 2000 + +m[3] : +m[3]; return { at: yy + '-' + pad(+m[2]) + '-' + pad(+m[1]) + ' ' + pad(+m[4]) + ':' + m[5], rest: l.replace(m[0], '') }; }
+    if ((m = l.match(/(\d{1,2})\s+([A-Za-z]{3})[a-z]*\.?\s+(?:(\d{4})\s+)?(\d{1,2}):(\d{2})/)) && MON[m[2].toLowerCase()]) return { at: (m[3] || y) + '-' + pad(MON[m[2].toLowerCase()]) + '-' + pad(+m[1]) + ' ' + pad(+m[4]) + ':' + m[5], rest: l.replace(m[0], '') };
+    return null;
+  }
+  function parseTracking(txt) {
+    var lines = txt.split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean), ev = [], firstDate = -1;
+    lines.forEach(function (l, i) { if (firstDate < 0 && parseStamp(l)) firstDate = i; });
+    if (firstDate < 0) return [];
+    var after = firstDate > 0;
+    for (var i = 0; i < lines.length; i++) {
+      var st = parseStamp(lines[i]); if (!st) continue;
+      var loc = st.rest.replace(/^[\s·,\-|]+|[\s·,\-|]+$/g, '');
+      var txtL = after ? lines[i - 1] : (lines[i + 1] && !parseStamp(lines[i + 1]) ? lines[i + 1] : loc);
+      if (after && parseStamp(lines[i - 1] || '')) txtL = loc;
+      ev.push({ at: st.at, loc: after ? loc : '', txt: txtL || '' });
+    }
+    return ev.sort(function (a, b) { return a.at < b.at ? 1 : -1; });
+  }
+  function legStatus(g) { var e = (g.events || [])[0]; if (!e) return ['', 'neutral']; if (/deliver|consegnat|ricevut/i.test(e.txt)) return [L2(['Consegnato', 'Delivered']), 'ok']; if (/hold|ferm|exception|eccezion/i.test(e.txt)) return [L2(['Bloccato', 'On hold']), 'bad']; return [L2(['In transito', 'In transit']), 'info']; }
+  function logisticsCard(d) {
+    var tr = d.track || { legs: [], events: [] }, cur = stageIdx(stageOf(d)), recv = d.status === 'ricevuta';
+    var steps = STAGES.map(function (s, i) {
+      var past = i < cur && s[0] !== 'ferma'; var cls = past ? 'c-neutral' : i === cur ? (s[0] === 'ferma' ? 'c-bad' : 'c-acc') : '';
+      return '<button type="button" class="chip ' + cls + '" data-act="stage" data-k="' + s[0] + '" style="border:1px solid var(--line2);cursor:pointer;' + (i === cur ? 'font-weight:800' : 'font-weight:500;background:transparent') + '"' + (recv ? ' disabled' : '') + '>' + (past ? '✓ ' : '') + esc(L2(s[1])) + '</button>';
+    }).join('');
+    var legs = (tr.legs || []).map(function (g, i) {
+      var st = legStatus(g), base = CARRIERS[g.carrier] || '', open = UI.legOpen === d.id + i, evs = g.events || [];
+      return '<div class="card stack" style="padding:12px 14px;border-left:4px solid ' + (st[1] === 'ok' ? 'var(--green)' : st[1] === 'bad' ? 'var(--red)' : 'var(--teal)') + '">' +
+        '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><div><div class="mute" style="font-size:11px;letter-spacing:.06em">' + esc((g.leg || L2(['TRATTA', 'LEG'])).toUpperCase()) + '</div><b>' + esc((g.from || '?') + ' → ' + (g.to || '?')) + '</b></div>' + (st[0] ? '<span class="chip c-' + st[1] + '">' + esc(st[0]) + '</span>' : '') + '</div>' +
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b>' + esc(g.carrier) + '</b><span class="chip c-neutral j">' + esc(g.num || '—') + '</span>' +
+        (g.num ? '<a class="btn sm" href="' + url17(g.num) + '" target="_blank" rel="noopener">' + esc(L2(['Apri su 17TRACK', 'Open on 17TRACK'])) + '</a>' : '') + (g.num && base ? '<a class="btn sm" href="' + base + encodeURIComponent(g.num.replace(/\s+/g, '')) + '" target="_blank" rel="noopener">' + esc(L2(['Sito vettore', 'Carrier site'])) + '</a>' : '') +
+        '<button class="btn sm" data-act="trpaste" data-i="' + i + '">' + esc(L2(['Incolla dati di tracking', 'Paste tracking data'])) + '</button></div>' +
+        (evs.length ? '<div class="mute" style="font-size:12px">' + esc(L2(['Ultimo evento', 'Last event'])) + ': ' + esc(evs[0].txt) + ' · ' + esc(evs[0].at) + (evs[0].loc ? ' · ' + esc(evs[0].loc) : '') + '</div>' +
+          '<button class="btn ghost sm" data-act="legtoggle" data-i="' + i + '" style="align-self:flex-start;color:var(--teal)">' + esc(open ? L2(['Nascondi timeline', 'Hide timeline']) : L2(['Mostra timeline', 'Show timeline']) + ' (' + evs.length + ')') + '</button>' +
+          (open ? '<div class="path">' + evs.map(function (e, j) { return '<div class="st ' + (j === 0 ? 'cur' : 'done') + '"><div class="dotc"><span class="dot"' + (/hold|ferm/i.test(e.txt) ? ' style="background:var(--red);border-color:var(--red)"' : '') + '></span>' + (j < evs.length - 1 ? '<span class="ln"></span>' : '') + '</div><div class="tx"><span class="lb">' + esc(e.txt) + '</span><span class="sb j">' + esc(e.at) + (e.loc ? ' · ' + esc(e.loc) : '') + '</span></div></div>'; }).join('') + '</div>' : '') : '<div class="mute" style="font-size:12px">' + esc(L2(['Nessun evento: apri 17TRACK, copia la cronologia e incollala qui.', 'No events: open 17TRACK, copy the history and paste it here.'])) + '</div>') +
+        '</div>';
+    }).join('');
+    var ev = (tr.events || []).slice().reverse().slice(0, 6).map(function (e) { return '<div><span class="j">' + fd(e.at) + '</span><span>' + esc(e.txt) + (e.loc ? ' · ' + esc(e.loc) : '') + (e.note ? ' · ' + esc(e.note) : '') + '</span></div>'; }).join('');
+    return '<section class="card stack"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2>' + esc(L2(['Dov\'è la merce', 'Where are the goods'])) + '</h2><button class="btn sm" data-act="legadd">' + esc(L2(['Aggiungi tratta e tracking', 'Add leg and tracking'])) + '</button></div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">' + steps + '</div>' + (ev ? '<div class="log">' + ev + '</div>' : '') + legs + '</section>';
+  }
+  CLICK.stage = function (a) {
+    var d = curDoc(); if (!d) return; var k = a.getAttribute('data-k');
+    if (k === 'a_bordo') { if (P.seat !== 'ship') { toast(L2(['La conferma a bordo spetta alla nave: passa alla postazione Bordo.', 'On-board confirmation is done by the vessel: switch to Vessel station.'])); return; } receiveModal(d); return; }
+    formModal(L2(['Aggiorna posizione merce', 'Update goods position']) + ' · ' + L2(STAGES[stageIdx(k)][1]),
+      '<div class="filters"><label>' + esc(t('c_date')) + '<input type="date" name="at" value="' + TODAY + '"></label><label>' + esc(L2(['Luogo', 'Place'])) + '<input name="loc"></label></div><label>' + esc(t('note')) + '<input name="note"></label>',
+      function (f) {
+        d.track = d.track || { legs: [], events: [] }; d.track.events = d.track.events || [];
+        d.log = d.log || []; d.track.stage = k; d.track.events.push({ at: f.elements.at.value || TODAY, txt: L2(STAGES[stageIdx(k)][1]), loc: f.elements.loc.value.trim(), note: f.elements.note.value.trim() });
+        var to = STAGES[stageIdx(k)][2];
+        if (to !== d.status && d.status !== 'ricevuta') setStatus(d, to, L2(STAGES[stageIdx(k)][1]) + (f.elements.loc.value ? ' · ' + f.elements.loc.value : ''));
+        else d.log.push({ at: TODAY, to: d.status, txt: L2(STAGES[stageIdx(k)][1]) + (f.elements.loc.value ? ' · ' + f.elements.loc.value : '') });
+        save(); render();
+      }, { ok: L2(['Aggiorna', 'Update']) });
+  };
+  CLICK.legadd = function () {
+    var d = curDoc(); if (!d) return;
+    formModal(L2(['Nuova tratta', 'New leg']),
+      '<div class="filters"><label>' + esc(L2(['Tratta', 'Leg'])) + '<select name="leg"><option>' + esc(L2(['Fornitore → hub', 'Supplier → hub'])) + '</option><option>' + esc(L2(['Hub → porto / agente', 'Hub → port / agent'])) + '</option><option>' + esc(L2(['Agente → bordo', 'Agent → vessel'])) + '</option><option>' + esc(L2(['Fornitore → bordo', 'Supplier → vessel'])) + '</option></select></label>' +
+      '<label>' + esc(L2(['Vettore', 'Carrier'])) + '<select name="carrier">' + Object.keys(CARRIERS).concat((DB.settings && DB.settings.forwarders) || []).map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('') + '</select></label></div>' +
+      '<label>' + esc(L2(['Numero di tracking / AWB / B/L', 'Tracking / AWB / B/L number'])) + '<input name="num"></label>' +
+      '<div class="filters"><label>' + esc(L2(['Da', 'From'])) + '<input name="from" value="' + esc(supName(d.sup)) + '"></label><label>' + esc(L2(['A', 'To'])) + '<input name="to" value="' + esc(d.hub || '') + '"></label></div>',
+      function (f) {
+        d.track = d.track || { legs: [], events: [] }; d.track.legs = d.track.legs || [];
+        d.log = d.log || []; d.track.legs.push({ leg: f.elements.leg.value, carrier: f.elements.carrier.value, num: f.elements.num.value.trim(), from: f.elements.from.value.trim(), to: f.elements.to.value.trim(), events: [] });
+        d.log.push({ at: TODAY, to: d.status, txt: L2(['Tracking ', 'Tracking ']) + f.elements.carrier.value + ' ' + f.elements.num.value.trim() });
+        save(); render();
+      }, { ok: L2(['Aggiungi', 'Add']) });
+  };
+  CLICK.trpaste = function (a) {
+    var d = curDoc(); if (!d) return; var g = d.track.legs[+a.getAttribute('data-i')];
+    formModal(L2(['Incolla dati di tracking', 'Paste tracking data']) + ' · ' + g.carrier + ' ' + g.num,
+      '<div class="mute" style="font-size:13px">' + esc(L2(['Su 17TRACK o sul sito del vettore seleziona la cronologia degli eventi, copia e incolla qui. Il prototipo riconosce date e ore e ricostruisce la timeline.', 'On 17TRACK or the carrier site select the event history, copy and paste here. Dates and times are recognised to rebuild the timeline.'])) + '</div><textarea name="txt" rows="12" class="j" style="font-size:12px"></textarea>',
+      function (f) {
+        var ev = parseTracking(f.elements.txt.value);
+        if (!ev.length) { toast(L2(['Nessuna data riconosciuta nel testo', 'No date recognised in the text'])); return false; }
+        d.log = d.log || []; g.events = ev; g.updated = TODAY; UI.legOpen = d.id + a.getAttribute('data-i');
+        d.log.push({ at: TODAY, to: d.status, txt: g.carrier + ' ' + g.num + ': ' + ev.length + ' ' + L2(['eventi', 'events']) + ' · ' + ev[0].txt });
+        save(); render(); toast(ev.length + ' ' + L2(['eventi importati', 'events imported']));
+      }, { w: 720, ok: L2(['Aggiorna timeline', 'Update timeline']) });
+  };
+  CLICK.legtoggle = function (a) { var d = curDoc(); var k = d.id + a.getAttribute('data-i'); UI.legOpen = UI.legOpen === k ? null : k; render(); };
+  function pageLogistics(q) {
+    var nave = q.nave || '';
+    var cols = [
+      ['sup', ['Dal fornitore', 'At supplier'], ['prep', 'pronta', 'ferma']],
+      ['hub', ['Verso / in hub', 'To / at hub'], ['verso_hub', 'in_hub']],
+      ['port', ['Porto, agente, consegna', 'Port, agent, delivery'], ['verso_porto', 'agente', 'verso_bordo']],
+      ['board', ['A bordo (ultimi 30 gg)', 'On board (last 30 days)'], ['a_bordo']]
+    ];
+    var from30 = addDays(TODAY, -30);
+    var dns = docs(function (d) { return d.type === 'DN' && (!nave || d.ship === nave) && (isOpen(d) || (d.status === 'ricevuta' && (lastLogDate(d) || d.date) >= from30)); });
+    var waiting = docs(function (d) { return d.type === 'PO' && (!nave || d.ship === nave) && { inviato: 1, confermato: 1, finalizzato: 1 }[d.status] && !children(d.id).some(function (x) { return x.type === 'DN'; }); });
+    function card(d) {
+      var st = stageOf(d), legs = (d.track && d.track.legs) || [], g = legs[legs.length - 1];
+      return '<a href="#/doc/' + d.id + '" class="card stack" style="padding:10px 12px;gap:4px;text-decoration:none;color:var(--ink)"><div style="display:flex;justify-content:space-between;gap:6px"><span class="j" style="font-size:12px;color:var(--teal);font-weight:600">' + esc(d.num) + '</span>' + COLS.ship.v(d) + '</div>' +
+        '<b style="font-size:13px">' + esc(d.desc) + '</b><span class="mute" style="font-size:12px">' + esc(supName(d.sup)) + '</span>' +
+        '<span style="font-size:12px">' + esc(L2(STAGES[stageIdx(st)][1])) + (isLate(d) ? ' · <span class="t-bad">' + esc(t('late')) + '</span>' : '') + '</span>' +
+        (g ? '<span class="j" style="font-size:11px">' + esc(g.carrier + ' ' + (g.num || '')) + (g.events && g.events[0] ? ' · ' + esc(g.events[0].txt) : '') + '</span>' : '') + (d.due ? '<span class="j mute" style="font-size:11px">ETA ' + fd(d.due) + '</span>' : '') + '</a>';
+    }
+    var shipOpts = DB.ships.map(function (s) { return '<option value="' + s.code + '"' + (nave === s.code ? ' selected' : '') + '>' + s.code + ' · ' + esc(s.name) + '</option>'; }).join('');
+    var board = '<div style="overflow-x:auto"><div style="display:grid;grid-template-columns:repeat(5,minmax(230px,1fr));gap:12px;min-width:1180px;align-items:start">' +
+      '<div class="stack"><h3 style="margin:0;font-size:14px">' + esc(L2(['Ordinato, senza DN', 'Ordered, no DN'])) + ' <span class="j mute">' + waiting.length + '</span></h3>' + waiting.sort(function (a, b) { return (a.due || '') < (b.due || '') ? -1 : 1; }).slice(0, 12).map(function (d) {
+        return '<a href="#/doc/' + d.id + '" class="card stack" style="padding:10px 12px;gap:4px;text-decoration:none;color:var(--ink)"><div style="display:flex;justify-content:space-between;gap:6px"><span class="j" style="font-size:12px;color:var(--teal);font-weight:600">' + esc(d.num) + '</span>' + COLS.ship.v(d) + '</div><b style="font-size:13px">' + esc(d.desc) + '</b><span class="mute" style="font-size:12px">' + esc(supName(d.sup)) + ' · ' + esc(stLabel(d)) + '</span><span class="j ' + (isLate(d) ? 't-bad' : 'mute') + '" style="font-size:11px">' + esc(L2(['Consegna', 'Delivery'])) + ' ' + fd(d.due) + '</span></a>';
+      }).join('') + (waiting.length > 12 ? '<a class="btn sm" href="#/docs' + qs({ tipo: 'PO', nave: nave, aperti: 1 }) + '">' + esc(L2(['Altri ', 'Other '])) + (waiting.length - 12) + ' →</a>' : '') + '</div>' +
+      cols.map(function (c) {
+        var ds = dns.filter(function (d) { return c[2].indexOf(stageOf(d)) >= 0; }).sort(function (a, b) { return (a.due || '') < (b.due || '') ? -1 : 1; });
+        return '<div class="stack"><h3 style="margin:0;font-size:14px">' + esc(L2(c[1])) + ' <span class="j mute">' + ds.length + '</span></h3>' + ds.slice(0, 12).map(card).join('') + (ds.length > 12 ? '<a class="btn sm" href="#/docs' + qs({ tipo: 'DN', nave: nave, aperti: 1 }) + '">' + esc(L2(['Altre ', 'Other '])) + (ds.length - 12) + ' →</a>' : '') + '</div>';
+      }).join('') + '</div></div>';
+    return shell('logistica', crumb([[t('fleet'), '#/']]), L2(['Logistica', 'Logistics']) + (nave ? ' · ' + nave : ''),
+      '<div class="filters"><select data-filter="nave" aria-label="' + esc(t('c_ship')) + '"><option value="">' + esc(t('allShips')) + '</option>' + shipOpts + '</select><span class="mute" style="font-size:12px">' + esc(L2(['Ordini inviati senza consegna aperta, poi ogni consegna per tappa. Clic per aprire.', 'Sent orders with no delivery yet, then each delivery by stage. Click to open.'])) + '</span></div>' + board);
+  }
+  function lastLogDate(d) { var l = d.log || []; return l.length ? l[l.length - 1].at : null; }
 
   /* ---------- render & events ---------- */
   function render() {
@@ -1678,6 +2025,8 @@
     else if (s[0] === 'dati') html = pageData();
     else if (s[0] === 'contabilita') html = pageAcc(r.q);
     else if (s[0] === 'impostazioni') html = pageSettings();
+    else if (s[0] === 'documenti') html = pageLibrary(r.q);
+    else if (s[0] === 'logistica') html = pageLogistics(r.q);
     else html = pageHome();
     var active = document.activeElement, keepFilter = active && active.getAttribute && active.getAttribute('data-filter') === 'q' ? active.selectionStart : null;
     root.innerHTML = html;
@@ -1753,6 +2102,8 @@
     }
     if (el.getAttribute('data-act') === 'zero') { UI.showZero = el.checked; render(); return; }
     if (el.getAttribute('data-edit')) { editLine(el); return; }
+    if (el.getAttribute('data-hoffer') || el.getAttribute('data-hch')) { var dof = curDoc(); if (dof && UI.edit && UI.edit.id === dof.id) { if (el.getAttribute('data-hoffer')) { dof.offer = dof.offer || {}; dof.offer[el.getAttribute('data-hoffer')] = el.value.trim(); } else { var kk = el.getAttribute('data-hch'), amt = parseNum(el.value); dof.charges = (dof.charges || []).filter(function (c) { return c.kind !== kk; }); if (amt) dof.charges.push({ kind: kk, amount: amt }); dof.total = docTotal(dof); } UI.edit.dirty = true; } return; }
+    if (el.getAttribute('data-act') === 'attach') { var da = curDoc(); if (!da) return; uploadFiles(el.files, function (out) { da.attachments = da.attachments || []; out.forEach(function (fl) { da.attachments.push({ id: 'A-' + fl.key, name: fl.name, kind: guessKind(fl.name), file: fl }); }); if (UI.edit && UI.edit.id === da.id) UI.edit.dirty = true; else { da.log = da.log || []; da.log.push({ at: TODAY, to: da.status, txt: L2(['Allegati aggiunti: ', 'Attachments added: ']) + out.map(function (x) { return x.name; }).join(', ') }); save(); } render(); toast(out.length + ' ' + L2(['file allegati', 'files attached'])); }); return; }
     if (el.getAttribute('data-set')) { setPath(el.getAttribute('data-set'), el.value); toast(L2(['Modello salvato', 'Template saved'])); return; }
     if (el.getAttribute('data-setcol')) { var pc = el.getAttribute('data-setcol').split('|'), cc = JSON.parse(JSON.stringify(tpl()[pc[0]].cols)); if (el.checked) cc[pc[1]] = 1; else delete cc[pc[1]]; DB.settings = DB.settings || {}; DB.settings[pc[0]] = DB.settings[pc[0]] || {}; DB.settings[pc[0]].cols = cc; save(); return; }
     if (el.getAttribute('data-act') === 'logo') { var lf = el.files && el.files[0]; if (!lf) return; if (lf.size > 300 * 1024) { toast(L2(['Logo troppo grande (max 300 KB)', 'Logo too large (max 300 KB)'])); return; } var lr = new FileReader(); lr.onload = function () { setPath('logo', lr.result); render(); }; lr.readAsDataURL(lf); return; }
@@ -1788,6 +2139,7 @@
     if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) { var s = document.getElementById('gsearch'); if (s) { s.focus(); s.select(); e.preventDefault(); } }
   });
 
+  DB.docs.forEach(function (d) { if (!d.log) d.log = []; });
   ensureDemo();
   if (!DB.settings && window.SEED.settings) { DB.settings = clone(window.SEED.settings); save(); }
   render();
