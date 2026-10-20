@@ -253,13 +253,12 @@
       '<div class="main"><header class="top">' +
       '<div class="crumbs"><small>' + crumbs + '</small><b>' + esc(title) + '</b></div>' +
       '<div class="search"><label>' + ico('search') + '<input id="gsearch" type="search" autocomplete="off" aria-label="' + esc(t('search')) + '" placeholder="' + esc(t('search')) + '"><span class="kbd j">Ctrl K</span></label><div id="gres"></div></div>' +
-      '<div class="tools">' + (DB.meta.demo ? '<a class="chip c-warn" href="#/dati" style="text-decoration:none">' + esc(P.lang === 'en' ? 'Sample data' : 'Dati di esempio') + '</a>' : '') + '<label class="fx j" title="' + esc(t('fxLabel')) + '">1 € = <input id="fxin" class="j" value="' + nf(fx(), 4) + '" aria-label="' + esc(t('fxLabel')) + '"> $</label>' +
+      '<div class="tools">' + (DB.meta.demo ? '<a class="chip c-warn" href="#/dati" style="text-decoration:none">' + esc(P.lang === 'en' ? 'Sample data' : 'Dati di esempio') + '</a>' : '') + 
       (UI.edit && UI.edit.id !== (route().seg[1] || '') ? '<a class="chip c-bad" style="text-decoration:none" href="#/doc/' + UI.edit.id + '">' + esc(L2(['Modifica non salvata', 'Unsaved edit'])) + '</a>' : '') +
       '<label class="fx" title="' + esc(L2(['Postazione', 'Station'])) + '"><select id="seatsel" aria-label="' + esc(L2(['Postazione', 'Station'])) + '" style="border:0;background:transparent;font-weight:700">' +
       [['office', ['Ufficio acquisti', 'Purchasing office']], ['ship', ['Bordo', 'Vessel']], ['acc', ['Contabilità', 'Accounting']]].map(function (o) { return '<option value="' + o[0] + '"' + (P.seat === o[0] ? ' selected' : '') + '>' + esc(L2(o[1])) + '</option>'; }).join('') + '</select></label>' +
-      '<button class="btn sm j" data-act="lang">' + (P.lang === 'en' ? 'EN · it' : 'IT · en') + '</button>' +
-      '<button class="btn sm" data-act="theme" aria-label="' + esc(t('theme')) + '" title="' + esc(t('theme')) + '">' + ico(effTheme() === 'dark' ? 'sun' : 'moon') + '</button></div>' +
-      '</header><div class="page">' + body + '</div></div></div>';
+      '</div>' +
+      '</header><div class="page">' + secTabs(active) + body + '</div></div></div>';
   }
   function crumb(parts) { return parts.map(function (p) { return p[1] ? '<a href="' + p[1] + '">' + esc(p[0]) + '</a>' : esc(p[0]); }).join(' › '); }
 
@@ -287,8 +286,8 @@
       '<div style="font-size:13px">' + esc(demo ? demo.num + ' · ' + demo.desc : '—') + '</div>' +
       (demoLast ? '<div class="mute" style="font-size:12px">' + esc(L2(['A che punto è: ', 'Current step: '])) + esc(t(demoLast.type + '1')) + ' ' + esc(demoLast.num) + ' · ' + esc(stLabel(demoLast)) + '</div>' : '') +
       '<div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn pri" href="#/doc/' + (demoLast ? demoLast.id : 'DEMO-RQ') + '">' + esc(L2(['Riprendi', 'Resume'])) + '</a><button class="btn" data-act="demoreset">' + esc(L2(['Ricomincia da capo', 'Start over'])) + '</button></div></section>' +
-      '<section class="card stack"><div style="display:flex;justify-content:space-between;align-items:baseline"><h2>' + esc(t('toChase')) + '</h2><a href="#/docs' + qs({ tipo: 'PO', late: 1 }) + '" style="font-size:12px">' + esc(t('all')) + ' (' + late.length + ')</a></div>' + lateHtml + '</section>' +
-      '<section class="next"><div class="t">' + esc(t('shipNotRecv')) + '</div><div class="j" style="font-size:22px;font-weight:600">' + dnTot + '</div><div class="mute" style="font-size:12px">' + esc(dnBy) + '</div><div style="font-size:13px;line-height:1.5">' + esc(t('shipNotRecvTxt')) + '</div><a href="#/docs' + qs({ tipo: 'DN', stato: 'spedita' }) + '" style="font-weight:700;font-size:13px">' + esc(t('all')) + ' →</a></section>' +
+      (function () { var it = todayItems(''); return '<section class="card stack"><div style="display:flex;justify-content:space-between;align-items:baseline"><h2>' + esc(L2(['Da fare', 'To do'])) + '</h2><a href="#/docs?tipo=todo" style="font-size:12px">' + esc(t('all')) + ' (' + it.length + ')</a></div>' +
+        TODO.map(function (g) { var n = it.filter(function (x) { return g[2].indexOf(x.g) >= 0; }).length; return '<a href="#/docs?tipo=todo" style="display:flex;justify-content:space-between;text-decoration:none;color:var(--ink);border-top:1px solid var(--line);padding-top:9px"><span>' + esc(L2(g[1])) + '</span><b class="j ' + (n ? 't-warn' : 'mute') + '">' + n + '</b></a>'; }).join('') + '</section>'; })() +
       '</aside>';
     var title = new Date().toLocaleDateString(loc(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     return shell('home', esc(title), t('fleet'), tot + '<div class="row"><section class="grow ships" aria-label="' + esc(t('fleet')) + '">' + cards + '</section>' + side + '</div>');
@@ -336,15 +335,7 @@
         kpiBox(t('rfqWait'), k.rfq, k.rfqLate + ' ' + t('overLimit'), k.rfqLate ? 'bad' : 'mute', '#/docs' + qs({ tipo: 'RFQ', nave: code, stato: 'inviata' })) +
         kpiBox(t('poOpen'), k.po, k.poLate + ' ' + t('late') + ' · ' + nf(k.poVal, 0) + ' €', k.poLate ? 'bad' : 'mute', '#/docs' + qs({ tipo: 'PO', nave: code, aperti: 1 })) +
         kpiBox(t('dnOpen'), k.dn, t('notRecv'), 'mute', '#/docs' + qs({ tipo: 'DN', nave: code, aperti: 1 })) + '</div>' +
-        '<div class="row"><div class="grow stack"><h2 style="margin:0;font-size:15px">' + esc(t('modules')) + '</h2><div class="mod">' +
-        '<a href="#/docs' + qs({ tipo: 'RQ', nave: code }) + '"><b>' + esc(t('purchasing')) + '</b><span class="n j">' + docs(function (d) { return d.ship === code && isOpen(d); }).length + '</span><span class="mute" style="font-size:12px">' + esc(P.lang === 'en' ? 'open documents' : 'documenti aperti') + '</span></a>' +
-        '<a href="#/budget' + qs({ nave: code }) + '"><b>' + esc(t('budget')) + '</b>' + shipBudgetBlock(code) + '</a>' +
-        '<a href="#/scadenze' + qs({ nave: code }) + '"><b>' + esc(t('due')) + '</b><span class="n j">' + docs(function (d) { return d.ship === code && isLate(d); }).length + '</span><span class="t-bad" style="font-size:12px">' + esc(t('sc_over')) + '</span></a>' +
-        '<a class="off" href="#/modulo/pms"><b>' + esc(t('pms')) + '</b><span class="mute" style="font-size:12px">' + esc(t('inPrep')) + '</span></a>' +
-        '<a href="#/magazzino' + qs({ nave: code }) + '"><b>' + esc(t('stores')) + '</b><span class="n j">' + arrivals(code).length + '</span><span class="mute" style="font-size:12px">' + esc(L2(['arrivi da caricare', 'arrivals to load'])) + '</span></a>' +
-        '<a href="#/logistica' + qs({ nave: code }) + '"><b>' + esc(L2(['Logistica', 'Logistics'])) + '</b><span class="n j">' + docs(function (d) { return d.ship === code && d.type === 'DN' && isOpen(d); }).length + '</span><span class="mute" style="font-size:12px">' + esc(L2(['consegne in corso', 'deliveries in progress'])) + '</span></a>' +
-        '<a href="#/documenti?q=' + encodeURIComponent(code) + '"><b>' + esc(L2(['Documenti', 'Documents'])) + '</b><span class="n j">' + (DB.techdocs || []).filter(function (td) { return (td.ships || []).indexOf(code) >= 0; }).length + '</span><span class="mute" style="font-size:12px">' + esc(L2(['documenti tecnici', 'technical documents'])) + '</span></a>' +
-        '<a class="off" href="#/modulo/certificati"><b>' + esc(t('certs')) + '</b><span class="mute" style="font-size:12px">' + esc(t('inPrep')) + '</span></a></div>' +
+        '<div class="row"><div class="grow stack">' + (DB.budgets[code] ? '<a class="card stack" href="#/budget?nave=' + code + '" style="text-decoration:none;color:var(--ink);max-width:560px"><h2 style="margin:0">' + esc(t('budget')) + ' 2026</h2>' + shipBudgetBlock(code) + '</a>' : '') +
         '<h2 style="margin:8px 0 0;font-size:15px">' + esc(t('recent')) + '</h2>' + gridTable(rec, ['num', 'type', 'desc', 'status', 'sup', 'date'], null, null) + '</div></div>';
     }
     return shell('ship', crumb([[t('fleet'), '#/']]) + ' · ' + esc(t('kind_' + s.kind)), s.name + ' · ' + s.code, body);
@@ -395,6 +386,7 @@
     return (d.num + ' ' + (d.orig || '') + ' ' + d.desc + ' ' + supName(d.sup)).toUpperCase().indexOf(q) >= 0;
   }
   function pageDocs(q) {
+    if (q.tipo === 'todo') return shell('docs', crumb([[t('fleet'), '#/'], [t('purchasing')]]), L2(['Da fare', 'To do']) + (q.nave ? ' · ' + q.nave : ''), todoBody(q));
     var tipo = q.tipo || 'RQ', nave = q.nave || '';
     var base = docs(function (d) { return !nave || d.ship === nave; });
     var tabs = ['RQ', 'RFQ', 'PO', 'DN', 'FT'].map(function (ty) {
@@ -402,7 +394,7 @@
       return '<a class="' + (ty === tipo ? 'on' : '') + '" href="#/docs' + qs({ tipo: ty, nave: nave }) + '">' + esc(t(ty)) + '<span class="j">' + n + '</span></a>';
     }).join('');
     var rows = base.filter(function (d) {
-      return d.type === tipo && (!q.stato || d.status === q.stato) && (!q.aperti || isOpen(d)) && (!q.late || isLate(d)) && matchQ(d, q.q);
+      return d.type === tipo && (!q.stato || d.status === q.stato) && (q.chiusi || isOpen(d)) && (!q.late || isLate(d)) && matchQ(d, q.q);
     });
     var srt = P.sort[tipo] || { k: 'date', d: -1 };
     var sf = COLS[srt.k] ? COLS[srt.k].s : COLS.date.s;
@@ -419,14 +411,14 @@
       '<select data-filter="nave" aria-label="' + esc(t('c_ship')) + '"><option value="">' + esc(t('allShips')) + '</option>' + shipOpts + '</select>' +
       '<select data-filter="stato" aria-label="' + esc(t('c_status')) + '"><option value="">' + esc(t('allStatus')) + '</option>' + stOpts + '</select>' +
       '<input type="search" data-filter="q" value="' + esc(q.q || '') + '" placeholder="' + esc(t('filterTxt')) + '" aria-label="' + esc(t('filterTxt')) + '">' +
-      '<label class="tog"><input type="checkbox" data-filter="aperti"' + (q.aperti ? ' checked' : '') + '> ' + esc(P.lang === 'en' ? 'Open only' : 'Solo aperti') + '</label>' +
+      '<label class="tog"><input type="checkbox" data-filter="chiusi"' + (q.chiusi ? ' checked' : '') + '> ' + esc(P.lang === 'en' ? 'Show closed' : 'Mostra chiusi') + '</label>' +
       '<label class="tog"><input type="checkbox" data-filter="late"' + (q.late ? ' checked' : '') + '> ' + esc(t('onlyLate')) + '</label>' +
       '<span style="flex:1"></span><span class="mute j" style="font-size:12px">' + rows.length + ' ' + esc(t('rows')) + '</span>' +
       (tipo === 'RQ' ? '<button class="btn pri sm" data-act="newrq" data-ship="' + nave + '">' + esc(L2(['Nuova richiesta', 'New requisition'])) + '</button>' : '') +
       '<div class="colmenu"><button class="btn sm" data-act="colmenu" aria-expanded="' + UI.colOpen + '">' + esc(t('columns')) + '</button>' + menu + '</div></div>';
     var title = t(tipo) + (nave ? ' · ' + nave : '');
     return shell('docs', crumb([[t('fleet'), '#/'], nave ? [shipBy(nave).name, '#/nave/' + nave] : [t('allShips')], [t('purchasing')]]), title,
-      '<nav class="tabs" aria-label="' + esc(t('purchasing')) + '">' + tabs + '</nav>' + filt + gridTable(rows, cols, srt.k, srt.d));
+      filt + gridTable(rows, cols, srt.k, srt.d));
   }
 
   /* ---------- document ---------- */
@@ -485,8 +477,7 @@
           if (UI.edit && UI.edit.id === d.id) return '<div class="note" style="background:var(--panel)">' + esc(L2(['Salva o annulla la modifica per proseguire.', 'Save or cancel the edit to continue.'])) + '</div>';
           return '<button class="btn pri" data-act="adv" data-to="' + a.to + '" data-form="' + (a.form || '') + '">' + esc(a.l[P.lang === 'en' ? 1 : 0]) + '</button>';
         }).join('') +
-        '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">' + sec.map(function (a) { return '<button class="btn sm" data-act="adv" data-to="' + a.to + '" data-form="' + (a.form || '') + '">' + esc(a.l[P.lang === 'en' ? 1 : 0]) + '</button>'; }).join('') +
-        (CANCEL[d.type] ? '<button class="btn link" data-act="cancel">' + esc(t('cancel')) + '</button>' : '') + '</div></section>';
+        '</section>';
     }
     var log = (d.log || []).slice().reverse().map(function (e) { return '<div><span class="j">' + fd(e.at) + '</span><span>' + esc(e.txt) + '</span></div>'; }).join('') ||
       '<div><span class="j">' + fd(d.date) + '</span><span>' + esc(P.lang === 'en' ? 'Imported from InfoSHIP' : 'Importato da InfoSHIP') + ' · ' + esc(stLabel(d)) + '</span></div>';
@@ -494,15 +485,13 @@
     var head = '<div class="stack" style="gap:8px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="j mute">' + esc(d.num) + '</span>' + chip(d) +
       (isLate(d) ? '<span class="chip c-bad">' + esc(t('late')) + '</span>' : '') +
       (d.prio && d.prio !== 'normale' ? '<span class="chip c-bad">' + esc(L2(PRIO[d.prio])) + '</span>' : '') + (d.demo ? '<span class="chip c-acc">DEMO</span>' : '') +
-      '<span class="chip c-neutral">' + esc(t('c_side')) + ': ' + esc(t(d.side)) + '</span>' + (d.dept ? '<span class="chip c-neutral">' + esc(t(d.dept)) + '</span>' : '') +
       (d.rev ? '<span class="chip c-warn">Rev. ' + d.rev + '</span>' : '') +
-      ((d.type === 'RFQ' || d.type === 'PO') && d.lines && d.lines.length ? '<button class="btn sm" data-act="pdf">PDF</button>' : '') + (feat('link') && d.type === 'RFQ' && d.lines && d.lines.length && { creata: 1, inviata: 1, quotata: 1 }[d.status] ? '<button class="btn sm" data-act="suplink">' + esc(L2(['Link fornitore', 'Supplier link'])) + '</button>' : '') +
-      (UI.edit && UI.edit.id === d.id ? '' : '<button class="btn sm" data-act="editstart">' + esc(L2(['Modifica', 'Edit'])) + '</button>') + '</div>' +
+      '<span style="flex:1"></span>' + moreMenu(d) + '</div>' +
       (UI.edit && UI.edit.id === d.id ? editHeader(d) : '<h1 class="h1">' + esc(d.desc || '—') + '</h1>' + (d.note ? '<div class="note">' + esc(d.note) + '</div>' : '')) + '</div>';
-    var body = '<div class="row">' + pathHtml +
-      '<div class="grow stack" style="gap:14px">' + head + (d.type === 'DN' ? (feat('qr') ? qrCard(d) : '') + logisticsCard(d) : '') + info + lines + ({ RQ: 1, RFQ: 1, PO: 1, DN: 1, FT: 1 }[d.type] ? attSection(d) : '') + '</div>' +
-      '<aside class="side">' + nextHtml + '<section class="card stack"><h2>' + esc(t('chain')) + '</h2><div class="chain">' + chainHtml + '</div></section>' +
-      '<section class="card stack"><h2>' + esc(t('history')) + '</h2><div class="log">' + log + '</div></section></aside></div>';
+    var body = '<div class="row">' + pathHtml + '<div class="grow stack" style="gap:14px">' + head + info +
+      docTabs(d, { righe: lines, all: { RQ: 1, RFQ: 1, PO: 1, DN: 1, FT: 1 }[d.type] ? attSection(d) : null, sped: d.type === 'DN' ? (feat('qr') ? qrCard(d) : '') + logisticsCard(d) : null,
+        cron: '<section class="card stack"><h2>' + esc(t('chain')) + '</h2><div class="chain">' + chainHtml + '</div></section><section class="card stack"><h2>' + esc(t('history')) + '</h2><div class="log">' + log + '</div></section>' }) +
+      '</div><aside class="side">' + nextHtml + '</aside></div>';
     return shell('doc', crumb([[t('fleet'), '#/'], [shipBy(d.ship).name, '#/nave/' + d.ship], [t(d.type), '#/docs' + qs({ tipo: d.type, nave: d.ship })]]), t(d.type + '1') + ' ' + d.num, body);
   }
   var FLOWORDER = { RQ: 0, RFQ: 1, PO: 2, DN: 3, FT: 4 };
@@ -569,7 +558,7 @@
       kpiBox(t('b_ord'), nf(tot.o, 0), '€', 'mute', '#/docs' + qs({ tipo: 'PO', nave: ship, aperti: 1 })) +
       kpiBox(t('b_del'), nf(tot.d, 0), '€', 'mute', '#/docs' + qs({ tipo: 'DN', nave: ship })) +
       kpiBox(t('b_rem'), nf(tot.b - tot.o - tot.d, 0), t('b_pr') + ' ' + Math.round(pr * 100) + '%', tot.b - tot.o - tot.d < 0 ? 'bad' : 'ok', '#/budget' + qs({ nave: ship })) + '</div>';
-    var body = '<nav class="tabs">' + tabs + '</nav>' + head +
+    var body = '<div class="shippick">' + tabs + '</div>' + head +
       '<div class="filters"><span class="legend"><span><i style="background:var(--bar2)"></i>' + esc(P.lang === 'en' ? 'within pro rata' : 'entro il pro rata') + '</span><span><i style="background:var(--red)"></i>' + esc(P.lang === 'en' ? 'over pro rata or no budget' : 'oltre il pro rata o senza budget') + '</span></span><span style="flex:1"></span>' +
       '<label class="tog"><input type="checkbox" data-act="zero"' + (UI.showZero ? ' checked' : '') + '> ' + esc(t('showZero')) + '</label></div>' +
       '<div class="tablebox btree"><table class="grid"><thead><tr><th>' + esc(t('acct')) + '</th><th class="num">' + esc(t('b_budget')) + '</th><th class="num">' + esc(t('b_ord')) + '</th><th class="num">' + esc(t('b_del')) + '</th><th class="num">' + esc(t('b_rem')) + '</th><th>' + esc(t('b_use')) + '</th><th class="num">' + esc(t('b_pr')) + '</th></tr></thead><tbody>' + tr + '</tbody></table></div>' +
@@ -766,7 +755,7 @@
       kpiBox(t('st_incoming'), nf(inArrV, 0), '€ · ' + (P.lang === 'en' ? 'ordered or shipped, not on board' : 'ordinato o spedito, non a bordo'), 'mute', '#/docs' + qs({ tipo: 'DN', nave: ship, aperti: 1 })) +
       kpiBox(t('st_under'), under, under ? t('st_reorder') : '—', under ? 'bad' : 'mute', '#/magazzino' + qs({ nave: ship, under: 1 })) +
       kpiBox(t('st_nItems'), items.length, (allLines ? Math.round(gen / allLines * 100) : 0) + '% ' + t('st_genShare'), gen ? 'warn' : 'mute', '#/magazzino' + qs({ nave: ship, gen: 1 })) + '</div>';
-    var tabs = '<nav class="tabs">' + [['arr', ['Arrivi da caricare', 'Arrivals to load']], ['art', 'st_items'], ['mov', 'st_moves'], ['doc', 'st_docs']].map(function (x) { var n = x[0] === 'arr' ? arrivals(ship).length : 0; return '<a class="' + (tab === x[0] ? 'on' : '') + '" href="#/magazzino' + qs({ nave: ship, tab: x[0] }) + '">' + esc(typeof x[1] === 'string' ? t(x[1]) : L2(x[1])) + (n ? '<span class="j">' + n + '</span>' : '') + '</a>'; }).join('') + '</nav>';
+    var tabs = '<nav class="tabs">' + [['art', 'st_items'], ['mov', 'st_moves']].map(function (x) { var n = x[0] === 'arr' ? arrivals(ship).length : 0; return '<a class="' + (tab === x[0] ? 'on' : '') + '" href="#/magazzino' + qs({ nave: ship, tab: x[0] }) + '">' + esc(typeof x[1] === 'string' ? t(x[1]) : L2(x[1])) + (n ? '<span class="j">' + n + '</span>' : '') + '</a>'; }).join('') + '</nav>';
     var body;
     if (!items.length && tab === 'art' && !arrivals(ship).length) body = '<div class="empty">' + esc(P.lang === 'en' ? 'No items for this vessel yet. Stores fill up when orders with lines arrive and the vessel confirms the DN.' : 'Nessun articolo per questa nave. Il magazzino si riempie quando arrivano ordini con righe e la nave conferma la DN.') + '</div>';
     else if (tab === 'mov') {
@@ -796,7 +785,7 @@
         }).join('') + '</tbody></table></div>';
     }
     return shell('magazzino', crumb([[t('fleet'), '#/'], [shipBy(ship).name, '#/nave/' + ship]]), t('stores') + ' · ' + ship,
-      '<nav class="tabs">' + shipTabs + '</nav>' + kp + tabs + body + '<div class="note">' + esc(t('st_note')) + '</div>');
+      '<div class="shippick">' + shipTabs + '</div>' + kp + tabs + body + '<div class="note">' + esc(t('st_note')) + '</div>');
   }
   function movesTable(mv, withItem) {
     if (!mv.length) return '<div class="empty">' + esc(t('st_none')) + '</div>';
@@ -1005,7 +994,7 @@
             '<span style="display:flex;justify-content:space-between;gap:6px"><span class="j" style="font-weight:600">' + money(x.net, r.cur) + '</span><span style="font-size:11px;font-weight:800;color:var(--accText)">' + (on ? esc(L2(['SCELTA', 'SELECTED'])) : '') + '</span></span>' +
             '<span class="j mute" style="font-size:11px">' + nf(x.price) + (x.d1 ? ' −' + nf(x.d1, 0) + '%' : '') + ' /' + esc(l.uom) + ' · ≈ ' + (r.cur === 'USD' ? money(v, 'EUR') : money(v * fx(), 'USD')) + '</span>' +
             '<span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">' + condChip(x.cond) + '<span class="j" style="font-size:11px">' + (x.days != null ? x.days + ' gg' : '') + '</span>' + (Math.abs(v - best[l.row]) < 0.005 ? '<span style="font-size:11px;font-weight:700;color:var(--teal)">' + esc(L2(['miglior prezzo', 'best price'])) + '</span>' : '') + '</span>' +
-            '<span class="mute" style="font-size:12px">' + esc(x.origin || '') + (x.oqty && x.oqty !== l.qty ? ' · ' + esc(L2(['offre', 'offers'])) + ' ' + nf(x.oqty) : '') + '</span>' + (feat('landed') && landed(r) ? '<span class="j" style="font-size:11px;color:var(--accText)">' + esc(L2(['a bordo ≈ ', 'landed ≈ '])) + money(v * landed(r).f, 'EUR') + '</span>' : '') + '</button>';
+            '<span class="mute" style="font-size:12px">' + esc(x.origin || '') + (x.oqty && x.oqty !== l.qty ? ' · ' + esc(L2(['offre', 'offers'])) + ' ' + nf(x.oqty) : '') + '</span>' + '</button>';
         }).join('');
     }).join('');
     var foot = '<div style="border-top:2px solid var(--ink);padding:10px 4px;font-weight:800">' + esc(L2(['Totale offerta', 'Offer total'])) + '</div>' + rfqs.map(function (r) {
@@ -1021,7 +1010,7 @@
     });
     var aw = Object.keys(sum).map(function (k) { return '<span>' + esc(supName(sum[k].r.sup)) + ' · ' + sum[k].n + ' ' + esc(L2(['righe', 'rows'])) + ' · <span class="j">' + money(sum[k].e, 'EUR') + '</span></span>'; }).join('');
     return '<section class="card stack" id="cmp"><div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px"><h2>' + esc(L2(['Comparazione offerte', 'Quotation comparison'])) + ' <span class="j mute">' + quoted.length + '/' + rfqs.length + '</span></h2>' +
-      '<div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="preset" data-k="price">' + esc(L2(['Miglior prezzo', 'Best price'])) + '</button><button type="button" class="btn sm" data-act="preset" data-k="genuine">' + esc(L2(['Miglior prezzo Genuine', 'Best Genuine price'])) + '</button><button type="button" class="btn sm" data-act="preset" data-k="fast">' + esc(L2(['Consegna più rapida', 'Fastest delivery'])) + '</button>' + (feat('landed') ? '<button type="button" class="btn sm" data-act="preset" data-k="landed">' + esc(L2(['Miglior costo a bordo', 'Best landed cost'])) + '</button>' : '') + '<button type="button" class="btn sm ghost" data-act="preset" data-k="none">' + esc(L2(['Azzera', 'Clear'])) + '</button></div></div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="preset" data-k="price">' + esc(L2(['Miglior prezzo', 'Best price'])) + '</button>' + (feat('landed') ? '<button type="button" class="btn sm" data-act="preset" data-k="landed">' + esc(L2(['Miglior costo a bordo', 'Best landed cost'])) + '</button>' : '') + '<button type="button" class="btn sm ghost" data-act="preset" data-k="none">' + esc(L2(['Azzera', 'Clear'])) + '</button></div></div>' +
       '<div style="overflow-x:auto"><div class="cmp" style="min-width:' + (180 + cols * 165) + 'px;grid-template-columns:minmax(170px,1.1fr) repeat(' + cols + ',minmax(160px,1fr))">' + head + body + foot + '</div></div>' +
       (totE ? '<div class="note" style="display:flex;flex-wrap:wrap;gap:6px 22px;color:var(--ink)"><b>' + esc(L2(['Scelta', 'Selection'])) + '</b>' + aw + '<b class="j">' + money(totE, 'EUR') + ' · ' + money(totE * fx(), 'USD') + '</b>' + (totL ? '<span class="j" style="color:var(--accText)">' + esc(L2(['a bordo stimato ', 'landed estimate '])) + money(totL, 'EUR') + '</span>' : '') + '</div>' : '<div class="mute" style="font-size:12px">' + esc(L2(['Clicca un\'offerta per sceglierla riga per riga, oppure usa una proposta automatica.', 'Click an offer to pick it row by row, or use an automatic proposal.'])) + '</div>') + '</section>';
   }
@@ -1192,6 +1181,7 @@
         }, { ok: L2(['Crea ordini', 'Create orders']) });
     },
     approve: function (po) {
+      if (feat('approv')) { var dd = defAccount(po), rr = apprRule(po, dd); if (rr.lvl === 0) { po.account = dd; setStatus(po, 'approvato', L2(['Approvazione automatica · ', 'Automatic approval · ']) + rr.why + ' · ' + dd); save(); render(); toast(L2(['Approvato in automatico', 'Approved automatically'])); return; } }
       var pa = postable(po.ship), pref = po.dept === 'DECK' ? '00-2-' : '00-3-', B = budgetAgg(po.ship);
       var def = po.account || (pa.filter(function (a) { return a.path.indexOf(pref) === 0; })[0] || pa[0] || {}).path;
       var poE = toEur(po.total, po.cur);
@@ -2026,7 +2016,7 @@
     ['sped', ['Spedizioni consolidate', 'Consolidated shipments'], ['Più consegne (DN) viaggiano insieme hub → nave in una Spedizione con un solo tracking. I costi di trasporto si ripartiscono sulle DN e vanno a budget (Logistic and packing).', 'Several DNs travel together hub → vessel with one tracking; freight costs are split and booked.'], ['Oggi: tracking e tappe su ogni singola DN.', 'Today: tracking on each DN.'], '#/logistica'],
     ['catalog', ['Catalogo dalle tavole', 'Catalogue from parts plates'], ['Le tavole dei costruttori diventano elenchi ricambi con P/N da confermare. Sulle righe senza codice la richiesta propone l\'articolo a catalogo più simile.', 'Maker plates become parts lists; generic lines get a catalogue suggestion.'], ['Oggi: un terzo delle righe con codice generico GI0001.', 'Today: a third of lines with generic code GI0001.'], '#/documenti']
   ];
-  function feat(k) { return !P.flags || P.flags[k] !== false; }
+  function feat(k) { if (HIDDEN[k]) return false; return !P.flags || P.flags[k] !== false; }
   function setts(path, def) { var o = DB.settings || {}, p = path.split('.'); for (var i = 0; i < p.length; i++) { if (o == null) return def; o = o[p[i]]; } return o == null ? def : o; }
   function aset(path, v) { DB.settings = DB.settings || {}; var o = DB.settings, p = path.split('.'); for (var i = 0; i < p.length - 1; i++) o = o[p[i]] = o[p[i]] || {}; o[p[p.length - 1]] = v; save(); }
   CLICK.flag = function (a) { P.flags = P.flags || {}; P.flags[a.getAttribute('data-k')] = a.checked; savePrefs(); render(); };
@@ -2056,7 +2046,7 @@
   }
 
   /* ---------- rail (normale o raggruppato) ---------- */
-  function railHtml(active, ship) {
+  function railHtmlOld(active, ship) {
     var home = feat('oggi');
     var E = {
       oggi: ['#/', 'cal', L2(['Oggi', 'Today']), active === 'oggi'],
@@ -2220,8 +2210,8 @@
   }
   function landedFoot(r) {
     var x = landed(r); if (!x) return '';
-    return '<span style="margin-top:4px;padding:6px 8px;border-radius:8px;background:var(--accSoft,rgba(240,140,40,.12));display:flex;flex-direction:column;gap:1px"><span style="font-size:11px;font-weight:700;letter-spacing:.04em">' + esc(L2(['A BORDO STIMATO', 'LANDED ESTIMATE'])) + '</span><span class="j" style="font-weight:700">' + money(x.tot, 'EUR') + '</span>' +
-      '<span class="mute" style="font-size:11px;line-height:1.4">' + esc(x.inc + ' · ' + x.z + ' · ' + L2(['trasp. ', 'freight ']) + nf(x.freight, 0) + (x.hist != null ? L2([' (storico fatture)', ' (invoice history)']) : '') + ' · hub ' + nf(x.hub, 0) + (x.cust ? ' · ' + L2(['dogana ', 'customs ']) + nf(x.cust, 0) : '') + (x.ch ? ' · ' + L2(['spese off. ', 'offer ch. ']) + nf(x.ch, 0) : '')) + '</span></span>';
+    return '<span title="' + esc(x.inc + ' · ' + x.z + ' · ' + L2(['trasporto ', 'freight ']) + nf(x.freight, 0) + (x.hist != null ? L2([' (storico fatture)', ' (invoice history)']) : '') + ' · hub ' + nf(x.hub, 0) + (x.cust ? ' · ' + L2(['dogana ', 'customs ']) + nf(x.cust, 0) : '') + (x.ch ? ' · ' + L2(['spese offerta ', 'offer charges ']) + nf(x.ch, 0) : '')) + '" style="margin-top:4px;padding:6px 8px;border-radius:8px;background:var(--accSoft);display:flex;flex-direction:column;gap:1px"><span style="font-size:11px;font-weight:700;letter-spacing:.04em">' + esc(L2(['A BORDO STIMATO', 'LANDED ESTIMATE'])) + '</span><span class="j" style="font-weight:700">' + money(x.tot, 'EUR') + '</span>' +
+'</span>';
   }
 
   /* ---------- 4. scheda fornitore ---------- */
@@ -2477,13 +2467,122 @@
     UI.edit.dirty = true; render(); toast(L2(['Riga collegata all\'articolo a catalogo', 'Row linked to catalogue item']));
   };
 
+
+  /* =====================================================================
+     SEMPLIFICAZIONE (20-10-2026): menu a 5 voci, schede di sezione,
+     pagina documento con un solo pulsante e schede, "Da fare" in Acquisti
+     ===================================================================== */
+  var HIDDEN = { oggi: 1, menu: 1, score: 1, sped: 1, catalog: 1 };
+  var SEC = {
+    acq: { act: ['docs', 'doc', 'fornitori'], tabs: function (r) {
+      var nave = r.q.nave || '', base = docs(function (d) { return (!nave || d.ship === nave) && isOpen(d); });
+      var cur = r.seg[0] === 'fornitori' || r.seg[0] === 'fornitore' ? 'sup' : (r.q.tipo || 'RQ');
+      var todo = todoCount(nave);
+      return [['todo', L2(['Da fare', 'To do']), '#/docs' + qs({ tipo: 'todo', nave: nave }), todo]].concat(['RQ', 'RFQ', 'PO', 'DN'].map(function (ty) { return [ty, t(ty), '#/docs' + qs({ tipo: ty, nave: nave }), base.filter(function (d) { return d.type === ty; }).length]; }))
+        .concat([['sup', t('suppliers'), '#/fornitori', null]]).map(function (x) { x.push(x[0] === cur); return x; });
+    } },
+    log: { act: ['logistica', 'magazzino', 'documenti'], tabs: function (r) {
+      var nave = r.q.nave || '', a = r.seg[0];
+      return [['arr', L2(['In arrivo', 'Incoming']), '#/logistica' + qs({ nave: nave }), null, a === 'logistica'], ['mag', t('stores'), '#/magazzino' + qs({ nave: nave || 'PEP' }), null, a === 'magazzino' || a === 'articolo'], ['doc', L2(['Documenti tecnici', 'Technical documents']), '#/documenti', null, a === 'documenti']];
+    } },
+    bud: { act: ['budget', 'contabilita', 'scadenze'], tabs: function (r) {
+      var a = r.seg[0];
+      return [['bud', t('budget'), '#/budget' + qs({ nave: r.q.nave || 'PEP' }), null, a === 'budget'], ['acc', L2(['Contabilità', 'Accounting']), '#/contabilita', null, a === 'contabilita']];
+    } },
+    set: { act: ['proposte', 'impostazioni', 'dati'], tabs: function (r) {
+      var a = r.seg[0];
+      return [['gen', L2(['Generale', 'General']), '#/proposte', null, a === 'proposte'], ['tpl', L2(['Modelli documenti', 'Document templates']), '#/impostazioni', null, a === 'impostazioni'], ['dati', t('data'), '#/dati', null, a === 'dati']];
+    } }
+  };
+  function secOf(active) { for (var k in SEC) if (SEC[k].act.indexOf(active) >= 0) return k; return null; }
+  function secTabs(active) {
+    var k = secOf(active), r = route(); if (!k || active === 'doc' || r.seg[0] === 'spedizione' || r.seg[0] === 'fornitore' || r.seg[0] === 'articolo') return '';
+    return '<nav class="tabs sectabs">' + SEC[k].tabs(r).map(function (x) { return '<a class="' + (x[4] ? 'on' : '') + '" href="' + x[2] + '">' + esc(x[1]) + (x[3] != null ? '<span class="j">' + x[3] + '</span>' : '') + '</a>'; }).join('') + '</nav>';
+  }
+  function railHtml(active, ship) {
+    var k = secOf(active);
+    var E = [
+      ['#/', 'fleet', t('fleet'), active === 'home' || active === 'ship'],
+      ['#/docs' + qs({ tipo: P.seat === 'office' ? 'todo' : 'RQ', nave: ship }), 'cart', t('purchasing'), k === 'acq'],
+      ['#/logistica' + qs({ nave: ship }), 'box', L2(['Logistica', 'Logistics']), k === 'log' || active === 'logistica'],
+      ['#/' + (P.seat === 'acc' ? 'contabilita' : 'budget' + qs({ nave: ship || 'PEP' })), 'chart', t('budget'), k === 'bud']
+    ];
+    return '<nav class="rail" aria-label="' + esc(t('fleet')) + '"><div class="brand">' + esc(ship || 'FLEET') + '</div>' + E.map(function (e) { return railLink(e[0], e[1], e[2], e[3]); }).join('') +
+      '<div class="sp"></div>' + railLink('#/proposte', 'gear', L2(['Impostazioni', 'Settings']), k === 'set') + '</nav>';
+  }
+
+  /* ---------- Da fare (dentro Acquisti) ---------- */
+  var TODO = [
+    ['dec', ['Da decidere', 'To decide'], ['eval', 'appr', 'send']],
+    ['sol', ['Da sollecitare', 'To chase'], ['rfq', 'po', 'dn']],
+    ['new', ['Richieste nuove da bordo', 'New requisitions from vessels'], ['new', 'inv']]
+  ];
+  function todoCount(nave) { return todayItems(nave).length; }
+  function todoBody(q) {
+    var nave = q.nave || '', items = todayItems(nave);
+    var html = TODO.map(function (g) {
+      var it = items.filter(function (x) { return g[2].indexOf(x.g) >= 0; }).sort(function (a, b) { return g[0] === 'dec' ? g[2].indexOf(a.g) - g[2].indexOf(b.g) || b.age - a.age : b.age - a.age; });
+      var all = UI.qAll && UI.qAll[g[0]];
+      return '<section class="card stack" style="gap:0"><h2 style="padding-bottom:8px">' + esc(L2(g[1])) + ' <span class="j mute">' + it.length + '</span></h2>' +
+        (it.length ? it.slice(0, all ? 999 : 6).map(qRow).join('') : '<div class="mute" style="font-size:13px;padding:6px 0">' + esc(L2(['Niente da fare.', 'Nothing to do.'])) + '</div>') +
+        (it.length > 6 && !all ? '<button class="btn ghost sm" data-act="qmore" data-k="' + g[0] + '" style="align-self:flex-start;margin-top:8px;color:var(--teal)">' + esc(L2(['Mostra tutte', 'Show all'])) + ' (' + it.length + ')</button>' : '') + '</section>';
+    }).join('');
+    var shipOpts = DB.ships.filter(function (s) { return s.infoship; }).map(function (s) { return '<option value="' + s.code + '"' + (nave === s.code ? ' selected' : '') + '>' + s.code + ' · ' + esc(s.name) + '</option>'; }).join('');
+    return '<div class="filters"><select data-filter="nave" aria-label="' + esc(t('c_ship')) + '"><option value="">' + esc(t('allShips')) + '</option>' + shipOpts + '</select><span style="flex:1"></span><button class="btn pri sm" data-act="newrq" data-ship="' + nave + '">' + esc(L2(['Nuova richiesta', 'New requisition'])) + '</button></div><div class="stack" style="gap:14px">' + html + '</div>';
+  }
+
+  /* ---------- Impostazioni · Generale ---------- */
+  function pageGeneral() {
+    var A = setts('approval', {}), Lc = setts('landed', {});
+    var num = function (path, v, w) { return '<input class="j" data-aset="' + path + '" value="' + nf(v, v % 1 ? 1 : 0) + '" inputmode="decimal" style="width:' + (w || 90) + 'px;text-align:right">'; };
+    var lab = function (l, inner) { return '<label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">' + esc(l) + inner + '</label>'; };
+    var tog = function (k, title, desc) { return '<label style="flex-direction:row;gap:10px;align-items:flex-start;color:var(--ink)"><input type="checkbox" data-act="flag" data-k="' + k + '"' + (feat(k) ? ' checked' : '') + ' style="margin-top:3px"> <span><b>' + esc(title) + '</b><br><span class="mute" style="font-size:12px">' + esc(desc) + '</span></span></label>'; };
+    var stale = docs(function (d) { return staleDn(d) && !d.stale; }).length;
+    var body = '<section class="card stack"><h2>' + esc(L2(['Visualizzazione', 'Display'])) + '</h2><div class="filters" style="align-items:flex-end">' +
+      lab(t('fxLabel'), '<span class="fx j" style="align-self:flex-start">1 € = <input id="fxin" class="j" value="' + nf(fx(), 4) + '" style="width:72px"> $</span>') +
+      lab(L2(['Lingua', 'Language']), '<button class="btn sm j" data-act="lang">' + (P.lang === 'en' ? 'English → Italiano' : 'Italiano → English') + '</button>') +
+      lab(L2(['Tema', 'Theme']), '<button class="btn sm" data-act="theme">' + ico(effTheme() === 'dark' ? 'sun' : 'moon') + ' ' + esc(effTheme() === 'dark' ? L2(['Passa al chiaro', 'Switch to light']) : L2(['Passa allo scuro', 'Switch to dark'])) + '</button>') + '</div></section>' +
+      '<section class="card stack"><h2>' + esc(L2(['Funzioni', 'Features'])) + '</h2>' +
+      tog('approv', L2(['Approvazione automatica sotto soglia', 'Automatic approval below threshold']), L2(['Gli ordini dentro soglia e budget si approvano da soli.', 'Orders within threshold and budget approve themselves.'])) +
+      '<div class="filters" style="padding-left:28px">' + lab(L2(['Soglia automatica €', 'Auto threshold €']), num('approval.auto', A.auto)) + lab(L2(['Approvatore', 'Approver']), '<input data-asett="approval.mgr" value="' + esc(A.mgr || '') + '" style="width:170px">') + lab(L2(['fino a €', 'up to €']), num('approval.mgrMax', A.mgrMax)) + lab(L2(['oltre o fuori budget', 'above or off budget']), '<input data-asett="approval.top" value="' + esc(A.top || '') + '" style="width:150px">') + '</div>' +
+      tog('landed', L2(['Costo stimato a bordo in comparazione', 'Landed cost estimate in comparison']), L2(['Un totale per fornitore: trasporto per zona, hub, dogana extra-UE.', 'One total per supplier.'])) +
+      '<div class="filters" style="padding-left:28px">' + ['EU', 'EXTRA', 'ASIA'].map(function (z) { return lab(L2(['Trasporto ', 'Freight ']) + z + ' %', num('landed.' + z + '.pct', (Lc[z] || {}).pct, 60)); }).join('') + lab('Hub €', num('landed.hub', Lc.hub, 70)) + lab(L2(['Dogana %', 'Customs %']), num('landed.customs', Lc.customs, 60)) + '</div>' +
+      tog('link', L2(['Link offerta per il fornitore', 'Supplier quotation link']), L2(['Il fornitore compila l\'offerta online.', 'The supplier fills in the offer online.'])) +
+      tog('qr', L2(['Ricevimento a bordo con QR', 'On-board receipt with QR']), L2(['Etichetta con QR sulla consegna, conferma dal telefono.', 'QR label, confirmation from the phone.'])) + '</section>' +
+      (stale ? '<section class="card stack"><h2>' + esc(L2(['Pulizia dati', 'Data clean-up'])) + '</h2><div style="font-size:13px">' + stale + ' ' + esc(L2(['consegne importate con arrivo previsto da oltre 30 giorni e mai confermate. Archiviarle le toglie da Da fare e dai ritardi.', 'imported deliveries due over 30 days ago, never confirmed.'])) + '</div><button class="btn sm" style="align-self:flex-start" data-act="stalearchive" data-nave="">' + esc(L2(['Archivia come storiche', 'Archive as historical'])) + '</button></section>' : '');
+    return shell('proposte', crumb([[t('fleet'), '#/']]), L2(['Impostazioni', 'Settings']), body);
+  }
+
+  /* ---------- pagina documento: menu Altro e schede ---------- */
+  CLICK.more = function () { UI.more = !UI.more; render(); };
+  CLICK.dtab = function (a) { var d = curDoc(); UI.dtab = UI.dtab || {}; UI.dtab[d.id] = a.getAttribute('data-k'); render(); };
+  function moreMenu(d) {
+    var it = [], secActs = UI.edit && UI.edit.id === d.id ? [] : actionsFor(d).filter(function (a) { return a.sec; });
+    if ((d.type === 'RFQ' || d.type === 'PO') && d.lines && d.lines.length) it.push('<button data-act="pdf">' + esc(L2(['Anteprima PDF', 'PDF preview'])) + '</button>');
+    if (feat('link') && d.type === 'RFQ' && d.lines && d.lines.length && { creata: 1, inviata: 1, quotata: 1 }[d.status]) it.push('<button data-act="suplink">' + esc(L2(['Link offerta per il fornitore', 'Supplier quotation link'])) + '</button>');
+    if (feat('qr') && d.type === 'DN') it.push('<button data-act="qrprint">' + esc(L2(['Stampa etichetta QR', 'Print QR label'])) + '</button>');
+    if (!(UI.edit && UI.edit.id === d.id)) it.push('<button data-act="editstart">' + esc(L2(['Modifica', 'Edit'])) + '</button>');
+    secActs.forEach(function (a) { it.push('<button data-act="adv" data-to="' + a.to + '" data-form="' + (a.form || '') + '">' + esc(a.l[P.lang === 'en' ? 1 : 0]) + '</button>'); });
+    if (CANCEL[d.type] && isOpen(d)) it.push('<button data-act="cancel" class="t-bad">' + esc(t('cancel')) + '</button>');
+    if (!it.length) return '';
+    return '<div class="colmenu"><button class="btn sm" data-act="more" aria-expanded="' + !!UI.more + '">' + esc(L2(['Altro', 'More'])) + ' ▾</button>' + (UI.more ? '<div class="menu moremenu" role="menu">' + it.join('') + '</div>' : '') + '</div>';
+  }
+  function docTabs(d, parts) {
+    UI.dtab = UI.dtab || {};
+    var keys = Object.keys(parts).filter(function (k) { return parts[k] != null; });
+    var cur = UI.edit && UI.edit.id === d.id ? 'righe' : UI.dtab[d.id] || (d.type === 'DN' && parts.sped ? 'sped' : 'righe');
+    if (keys.indexOf(cur) < 0) cur = keys[0];
+    var lab = { righe: L2(['Righe', 'Lines']), all: L2(['Allegati', 'Attachments']) + ' <span class="j">' + (d.attachments || []).length + '</span>', sped: L2(['Spedizione', 'Shipment']), cron: L2(['Cronologia', 'History']) };
+    return '<nav class="tabs doctabs">' + keys.map(function (k) { return '<a href="#" onclick="return false" data-act="dtab" data-k="' + k + '" class="' + (k === cur ? 'on' : '') + '">' + lab[k] + '</a>'; }).join('') + '</nav>' + parts[cur];
+  }
+
   /* ---------- render & events ---------- */
   function render() {
     var r = route(), s = r.seg, html;
     if (s[0] === 'offerta' || s[0] === 'ricevi') { root.innerHTML = s[0] === 'offerta' ? pageSupplierQuote(s[1]) : pageReceive(s[1]); document.documentElement.lang = P.lang; afterRender(); return; }
     if (!s.length) html = feat('oggi') ? pageToday(r.q) : pageHome();
     else if (s[0] === 'flotta') html = pageHome();
-    else if (s[0] === 'proposte') html = pageProposals();
+    else if (s[0] === 'proposte') html = pageGeneral();
     else if (s[0] === 'spedizione') html = pageShipment(s[1]);
     else if (s[0] === 'nave') html = pageShip(s[1]);
     else if (s[0] === 'docs') html = pageDocs(r.q);
@@ -2517,6 +2616,7 @@
 
   root.addEventListener('click', function (e) {
     var a = e.target.closest('[data-act]');
+    if (UI.more && !(a && a.getAttribute('data-act') === 'more')) { UI.more = false; render(); if (!a) return; }
     if (e.target.closest('[data-stop]')) return;
     if (!a) {
       var tr = e.target.closest('tr[data-href]'); if (tr) { location.hash = tr.getAttribute('data-href'); return; }

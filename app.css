@@ -221,3 +221,13 @@ table.grid td a[href^="#/fornitore"]{display:inline-block;min-width:140px}
   .qrow{grid-template-columns:1fr auto;grid-template-areas:"n a" "d d" "g b"}
   .qrow>:nth-child(1){grid-area:n}.qrow>:nth-child(2){grid-area:a}.qrow>:nth-child(3){grid-area:d}.qrow>:nth-child(4){grid-area:g}.qrow>:nth-child(5){grid-area:b}
 }
+/* semplificazione 20-10 */
+.sectabs{margin-bottom:14px}
+.moremenu{right:0;left:auto;min-width:230px;display:flex;flex-direction:column;padding:6px}
+.moremenu button{background:none;border:0;text-align:left;padding:8px 10px;border-radius:6px;font:inherit;font-size:13px;color:var(--ink);cursor:pointer}
+.moremenu button:hover{background:var(--line)}
+.moremenu button.t-bad{color:var(--red)}
+.doctabs{margin-bottom:-4px}
+.shippick{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.shippick a{padding:5px 12px;border:1px solid var(--line2);border-radius:999px;text-decoration:none;color:var(--mute);font-size:12px;font-weight:700}
+.shippick a.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
