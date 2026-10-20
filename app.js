@@ -132,7 +132,7 @@
     },
     DN: {
       pronta: [{ to: 'spedita', l: ['Spedita alla nave', 'Shipped to vessel'] }],
-      spedita: [{ to: 'ricevuta', l: ['Ricevuta a bordo (DN firmata)', 'Received on board (signed DN)'], form: 'receive', ship: 1 }]
+      spedita: [{ to: 'ricevuta', l: ['Ricevi e carica a magazzino (DN firmata)', 'Receive and load stores (signed DN)'], form: 'receive', ship: 1 }]
     }
   };
   var CANCEL = { RQ: 'annullata', RFQ: 'annullata', PO: 'annullato' };
@@ -257,12 +257,15 @@
       railLink('#/scadenze' + qs({ nave: ship }), 'cal', t('due'), active === 'scadenze') +
       railLink('#/budget' + qs({ nave: ship || 'PEP' }), 'chart', t('budget'), active === 'budget') +
       railLink('#/fornitori', 'ppl', t('suppliers'), active === 'fornitori') +
+      railLink('#/contabilita', 'doc', L2(['Contabilità', 'Accounting']), active === 'contabilita') +
       '<div class="sp"></div>' + railLink('#/dati', 'db', t('data'), active === 'dati') +
       '</nav><div class="main"><header class="top">' +
       '<div class="crumbs"><small>' + crumbs + '</small><b>' + esc(title) + '</b></div>' +
       '<div class="search"><label>' + ico('search') + '<input id="gsearch" type="search" autocomplete="off" aria-label="' + esc(t('search')) + '" placeholder="' + esc(t('search')) + '"><span class="kbd j">Ctrl K</span></label><div id="gres"></div></div>' +
       '<div class="tools">' + (DB.meta.demo ? '<a class="chip c-warn" href="#/dati" style="text-decoration:none">' + esc(P.lang === 'en' ? 'Sample data' : 'Dati di esempio') + '</a>' : '') + '<label class="fx j" title="' + esc(t('fxLabel')) + '">1 € = <input id="fxin" class="j" value="' + nf(fx(), 4) + '" aria-label="' + esc(t('fxLabel')) + '"> $</label>' +
-      '<button class="btn sm' + (P.seat === 'ship' ? ' pri' : '') + '" data-act="seat">' + esc(t(P.seat === 'ship' ? 'seatShip' : 'seatOffice')) + '</button>' +
+      (UI.edit && UI.edit.id !== (route().seg[1] || '') ? '<a class="chip c-bad" style="text-decoration:none" href="#/doc/' + UI.edit.id + '">' + esc(L2(['Modifica non salvata', 'Unsaved edit'])) + '</a>' : '') +
+      '<label class="fx" title="' + esc(L2(['Postazione', 'Station'])) + '"><select id="seatsel" aria-label="' + esc(L2(['Postazione', 'Station'])) + '" style="border:0;background:transparent;font-weight:700">' +
+      [['office', ['Ufficio acquisti', 'Purchasing office']], ['ship', ['Bordo', 'Vessel']], ['acc', ['Contabilità', 'Accounting']]].map(function (o) { return '<option value="' + o[0] + '"' + (P.seat === o[0] ? ' selected' : '') + '>' + esc(L2(o[1])) + '</option>'; }).join('') + '</select></label>' +
       '<button class="btn sm j" data-act="lang">' + (P.lang === 'en' ? 'EN · it' : 'IT · en') + '</button>' +
       '<button class="btn sm" data-act="theme" aria-label="' + esc(t('theme')) + '" title="' + esc(t('theme')) + '">' + ico(effTheme() === 'dark' ? 'sun' : 'moon') + '</button></div>' +
       '</header><div class="page">' + body + '</div></div></div>';
@@ -462,7 +465,7 @@
       (d.type === 'PO' && d.account ? '<dt>' + esc(L2(['Conto di budget', 'Budget account'])) + '</dt><dd class="j">' + esc(d.account) + '</dd>' : '') +
       (d.type === 'DN' && d.route ? '<dt>' + esc(L2(['Percorso', 'Route'])) + '</dt><dd>' + esc(d.route === 'hub' ? L2(['Via hub', 'Via hub']) + ' · ' + d.hub : L2(['Diretta a bordo', 'Direct on board'])) + (d.port ? ' → ' + esc(d.port) : '') + '</dd>' : '') +
       '<dt>' + esc(d.type === 'FT' ? L2(['N. fattura fornitore', 'Supplier invoice no.']) : t('c_orig')) + '</dt><dd class="j">' + esc(d.orig || '—') + '</dd></dl></section>';
-    var lines = editable(d) ? rqEditor(d) + comparison(d) : d.lines ? linesTable(d) + (d.type === 'RQ' ? comparison(d) : '') : '<section class="card stack"><h2>' + esc(t('lines')) + '</h2><div class="note">' + esc(t('noLines')) + '</div></section>';
+    var lines = (linesOpen(d) && !(UI.edit && UI.edit.id === d.id) && !d.lines.length) ? '<section class="card stack"><h2>' + esc(t('lines')) + '</h2><div class="note">' + esc(L2(['Nessuna riga. Premi Modifica per aggiungere gli articoli.', 'No rows. Press Edit to add items.'])) + '</div></section>' : editable(d) ? rqEditor(d) + comparison(d) : (UI.edit && UI.edit.id === d.id && d.type === 'PO' && d.lines) ? poEditor(d) : d.lines ? linesTable(d) + (d.type === 'RQ' ? comparison(d) : '') : '<section class="card stack"><h2>' + esc(t('lines')) + '</h2><div class="note">' + esc(t('noLines')) + '</div></section>';
 
     // chain
     var rt = chainRoot(d), chainRows = [];
@@ -484,10 +487,12 @@
       nextHtml = '<section class="next"><div class="k">' + esc(t('next').toUpperCase()) + '</div><div class="t">' + esc(pri[0].l[P.lang === 'en' ? 1 : 0]) + '</div>' +
         (d.type === 'PO' && d.status === 'bozza' ? '<div style="font-size:12px">' + esc(t('impactTxt')) + '</div>' : '') +
         pri.map(function (a) {
-          if (a.ship && P.seat !== 'ship') return '<div class="note" style="background:var(--panel)"><b>' + esc(t('onlyShipAct')) + '</b><br>' + esc(d.type === 'DN' ? t('onlyShip') : a.l[P.lang === 'en' ? 1 : 0]) + '</div><button class="btn" data-act="seat">' + esc(t('toShipSeat')) + '</button>';
+          if (a.ship && P.seat !== 'ship') return '<div class="note" style="background:var(--panel)"><b>' + esc(t('onlyShipAct')) + '</b><br>' + esc(d.type === 'DN' ? t('onlyShip') : a.l[P.lang === 'en' ? 1 : 0]) + '</div><button class="btn" data-act="seat" data-to="ship">' + esc(t('toShipSeat')) + '</button>';
+          if (a.acc && P.seat !== 'acc') return '<div class="note" style="background:var(--panel)"><b>' + esc(L2(['Azione della Contabilità', 'Accounting action'])) + '</b><br>' + esc(a.l[P.lang === 'en' ? 1 : 0]) + '</div><button class="btn" data-act="seat" data-to="acc">' + esc(L2(['Passa alla postazione Contabilità', 'Switch to Accounting station'])) + '</button>';
+          if (UI.edit && UI.edit.id === d.id) return '<div class="note" style="background:var(--panel)">' + esc(L2(['Salva o annulla la modifica per proseguire.', 'Save or cancel the edit to continue.'])) + '</div>';
           return '<button class="btn pri" data-act="adv" data-to="' + a.to + '" data-form="' + (a.form || '') + '">' + esc(a.l[P.lang === 'en' ? 1 : 0]) + '</button>';
         }).join('') +
-        '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">' + sec.map(function (a) { return '<button class="btn sm" data-act="adv" data-to="' + a.to + '">' + esc(a.l[P.lang === 'en' ? 1 : 0]) + '</button>'; }).join('') +
+        '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">' + sec.map(function (a) { return '<button class="btn sm" data-act="adv" data-to="' + a.to + '" data-form="' + (a.form || '') + '">' + esc(a.l[P.lang === 'en' ? 1 : 0]) + '</button>'; }).join('') +
         (CANCEL[d.type] ? '<button class="btn link" data-act="cancel">' + esc(t('cancel')) + '</button>' : '') + '</div></section>';
     }
     var log = (d.log || []).slice().reverse().map(function (e) { return '<div><span class="j">' + fd(e.at) + '</span><span>' + esc(e.txt) + '</span></div>'; }).join('') ||
@@ -496,8 +501,10 @@
     var head = '<div class="stack" style="gap:8px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="j mute">' + esc(d.num) + '</span>' + chip(d) +
       (isLate(d) ? '<span class="chip c-bad">' + esc(t('late')) + '</span>' : '') +
       (d.prio && d.prio !== 'normale' ? '<span class="chip c-bad">' + esc(L2(PRIO[d.prio])) + '</span>' : '') + (d.demo ? '<span class="chip c-acc">DEMO</span>' : '') +
-      '<span class="chip c-neutral">' + esc(t('c_side')) + ': ' + esc(t(d.side)) + '</span>' + (d.dept ? '<span class="chip c-neutral">' + esc(t(d.dept)) + '</span>' : '') + '</div>' +
-      '<h1 class="h1">' + esc(d.desc || '—') + '</h1></div>';
+      '<span class="chip c-neutral">' + esc(t('c_side')) + ': ' + esc(t(d.side)) + '</span>' + (d.dept ? '<span class="chip c-neutral">' + esc(t(d.dept)) + '</span>' : '') +
+      (d.rev ? '<span class="chip c-warn">Rev. ' + d.rev + '</span>' : '') +
+      (UI.edit && UI.edit.id === d.id ? '' : '<button class="btn sm" data-act="editstart">' + esc(L2(['Modifica', 'Edit'])) + '</button>') + '</div>' +
+      (UI.edit && UI.edit.id === d.id ? editHeader(d) : '<h1 class="h1">' + esc(d.desc || '—') + '</h1>' + (d.note ? '<div class="note">' + esc(d.note) + '</div>' : '')) + '</div>';
     var body = '<div class="row">' + pathHtml +
       '<div class="grow stack" style="gap:14px">' + head + info + lines + '</div>' +
       '<aside class="side">' + nextHtml + '<section class="card stack"><h2>' + esc(t('chain')) + '</h2><div class="chain">' + chainHtml + '</div></section>' +
@@ -691,10 +698,10 @@
   function receiveModal(dn) {
     var bg = document.createElement('div'); bg.className = 'modal-bg';
     var rows = (dn.lines || []).map(function (l, i) {
-      return '<tr><td class="j">' + l.row + '</td><td>' + esc(l.desc) + (l.note ? '<div class="mute" style="font-size:12px">' + esc(l.note) + '</div>' : '') + '</td><td class="num j">' + nf(l.qty) + ' ' + esc(l.uom) + '</td><td><input name="q' + i + '" value="' + nf(l.qty) + '" inputmode="decimal" style="width:90px;text-align:right" aria-label="' + esc(t('l_recv')) + ' ' + l.row + '"></td></tr>';
+      return '<tr><td class="j">' + l.row + '</td><td>' + esc(l.desc) + (l.note ? '<div class="mute" style="font-size:12px">' + esc(l.note) + '</div>' : '') + '</td><td class="num j">' + nf(l.qty) + ' ' + esc(l.uom) + '</td><td><input name="q' + i + '" value="' + nf(l.qty) + '" inputmode="decimal" style="width:90px;text-align:right" aria-label="' + esc(t('l_recv')) + ' ' + l.row + '"></td><td><input name="loc' + i + '" value="' + esc(locOf(dn.ship, l.item) || '') + '" placeholder="' + esc(L2(['es. Magazzino macchina A3', 'e.g. Engine store A3'])) + '" style="width:170px" aria-label="' + esc(L2(['Ubicazione', 'Location'])) + '"></td></tr>';
     }).join('');
-    bg.innerHTML = '<form class="modal" style="width:min(820px,100%)" role="dialog" aria-modal="true" aria-label="' + esc(t('rcvTitle')) + '"><h3>' + esc(t('rcvTitle')) + ' · ' + esc(dn.num) + '</h3>' +
-      (rows ? '<p class="mute" style="margin:0;font-size:13px">' + esc(t('rcvTxt')) + '</p><div class="tablebox" style="max-height:45vh;overflow:auto"><table class="grid" style="min-width:560px"><thead><tr><th>' + esc(t('l_row')) + '</th><th>' + esc(t('c_desc')) + '</th><th class="num">' + esc(t('l_ship')) + '</th><th>' + esc(t('l_recv')) + '</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '') +
+    bg.innerHTML = '<form class="modal" style="width:min(980px,100%);max-height:92vh;overflow:auto" role="dialog" aria-modal="true" aria-label="' + esc(t('rcvTitle')) + '"><h3>' + esc(L2(['Ricevi e carica a magazzino', 'Receive and load stores'])) + ' · ' + esc(dn.num) + '</h3>' +
+      (rows ? '<p class="mute" style="margin:0;font-size:13px">' + esc(t('rcvTxt')) + '</p><div class="tablebox" style="max-height:45vh;overflow:auto"><table class="grid" style="min-width:560px"><thead><tr><th>' + esc(t('l_row')) + '</th><th>' + esc(t('c_desc')) + '</th><th class="num">' + esc(t('l_ship')) + '</th><th>' + esc(t('l_recv')) + '</th><th>' + esc(L2(['Ubicazione a bordo', 'Onboard location'])) + '</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '') +
       '<label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" name="signed" required> ' + esc(t('signed')) + '</label>' +
       '<label>' + esc(t('signedFile')) + '<input type="file" name="file" accept="image/*,application/pdf"></label>' +
       '<div class="mute" style="font-size:12px">' + esc(t('signedReq')) + '</div>' +
@@ -713,7 +720,8 @@
         if (!l.item && q > 0) l.item = ensureItem(l, po);
         if (q > 0 && l.item) {
           var pl = po && po.lines ? po.lines.filter(function (x) { return x.row === l.src; })[0] : null;
-          DB.moves.push({ id: 'M-' + dn.id + '-' + l.row + '-' + Date.now(), ship: dn.ship, item: l.item, date: TODAY, qty: q, kind: 'carico', doc: dn.id, row: l.row, cost: pl ? Math.round(unitEur(po, pl) * 10000) / 10000 : 0 });
+          var loc = (form.elements['loc' + i].value || '').trim(); if (loc) { DB.loc = DB.loc || {}; DB.loc[dn.ship + '|' + l.item] = loc; }
+          DB.moves.push({ id: 'M-' + dn.id + '-' + l.row + '-' + Date.now(), ship: dn.ship, item: l.item, date: TODAY, qty: q, kind: 'carico', doc: dn.id, row: l.row, loc: loc, cost: pl ? Math.round(unitEur(po, pl) * 10000) / 10000 : 0 });
         }
       });
       dn.signed = (P.lang === 'en' ? 'Signed DN' : 'DN firmata') + (f ? ': ' + f.name : '') + ' · ' + fd(TODAY);
@@ -763,12 +771,14 @@
       kpiBox(t('st_incoming'), nf(inArrV, 0), '€ · ' + (P.lang === 'en' ? 'ordered or shipped, not on board' : 'ordinato o spedito, non a bordo'), 'mute', '#/docs' + qs({ tipo: 'DN', nave: ship, aperti: 1 })) +
       kpiBox(t('st_under'), under, under ? t('st_reorder') : '—', under ? 'bad' : 'mute', '#/magazzino' + qs({ nave: ship, under: 1 })) +
       kpiBox(t('st_nItems'), items.length, (allLines ? Math.round(gen / allLines * 100) : 0) + '% ' + t('st_genShare'), gen ? 'warn' : 'mute', '#/magazzino' + qs({ nave: ship, gen: 1 })) + '</div>';
-    var tabs = '<nav class="tabs">' + [['art', 'st_items'], ['mov', 'st_moves'], ['doc', 'st_docs']].map(function (x) { return '<a class="' + (tab === x[0] ? 'on' : '') + '" href="#/magazzino' + qs({ nave: ship, tab: x[0] }) + '">' + esc(t(x[1])) + '</a>'; }).join('') + '</nav>';
+    var tabs = '<nav class="tabs">' + [['arr', ['Arrivi da caricare', 'Arrivals to load']], ['art', 'st_items'], ['mov', 'st_moves'], ['doc', 'st_docs']].map(function (x) { var n = x[0] === 'arr' ? arrivals(ship).length : 0; return '<a class="' + (tab === x[0] ? 'on' : '') + '" href="#/magazzino' + qs({ nave: ship, tab: x[0] }) + '">' + esc(typeof x[1] === 'string' ? t(x[1]) : L2(x[1])) + (n ? '<span class="j">' + n + '</span>' : '') + '</a>'; }).join('') + '</nav>';
     var body;
-    if (!items.length && tab === 'art') body = '<div class="empty">' + esc(P.lang === 'en' ? 'No items for this vessel yet. Stores fill up when orders with lines arrive and the vessel confirms the DN.' : 'Nessun articolo per questa nave. Il magazzino si riempie quando arrivano ordini con righe e la nave conferma la DN.') + '</div>';
+    if (!items.length && tab === 'art' && !arrivals(ship).length) body = '<div class="empty">' + esc(P.lang === 'en' ? 'No items for this vessel yet. Stores fill up when orders with lines arrive and the vessel confirms the DN.' : 'Nessun articolo per questa nave. Il magazzino si riempie quando arrivano ordini con righe e la nave conferma la DN.') + '</div>';
     else if (tab === 'mov') {
       var mv = (DB.moves || []).filter(function (x) { return x.ship === ship; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
       body = movesTable(mv, true);
+    } else if (tab === 'arr') {
+      body = arrivalsTable(ship);
     } else if (tab === 'doc') {
       body = gridTable(docs(function (d) { return d.ship === ship && (d.type === 'CS' || d.type === 'INV' || (d.type === 'DN' && d.status === 'ricevuta')); }).sort(function (a, b) { return a.date < b.date ? 1 : -1; }), ['num', 'type', 'desc', 'status', 'date'], null, null);
     } else {
@@ -868,7 +878,8 @@
     d.log.push({ at: TODAY, to: d.status, txt: L2(ST[type][d.status]) + (note ? ' · ' + note : '') });
     DB.docs.push(d); return d;
   }
-  function editable(d) { return d.type === 'RQ' && !!d.lines && (d.status === 'bozza' || d.status === 'endorsed' || d.status === 'verifica'); }
+  function linesOpen(d) { return d.type === 'RQ' && !!d.lines && (d.status === 'bozza' || d.status === 'endorsed' || d.status === 'verifica'); }
+  function editable(d) { return linesOpen(d) && !!UI.edit && UI.edit.id === d.id; }
   function docGoods(d) { return (d.lines || []).reduce(function (a, l) { return a + (l.quoted === false ? 0 : (l.net || 0)); }, 0); }
   function docTotal(d) { return Math.round((docGoods(d) + (d.charges || []).reduce(function (a, c) { return a + (c.amount || 0); }, 0)) * 100) / 100; }
   function postable(ship) {
@@ -928,16 +939,17 @@
     if (d.type === 'PO') {
       if (d.status === 'bozza') return [{ to: 'approvato', l: ['Approva ordine', 'Approve order'], form: 'approve' }];
       if (d.status === 'approvato') return [{ to: 'inviato', l: ['Prepara email e invia', 'Prepare email and send'], form: 'mail' }];
-      if (d.status === 'finalizzato') return poResidual(d).some(function (x) { return x > 0; }) ? [{ to: 'finalizzato', l: ['Merce pronta: crea consegna (DN)', 'Goods ready: create delivery note'], form: 'dn' }] : [];
-      return base;
+      var rs = d.needResend ? [{ to: d.status, l: ['Rimanda Rev. ' + d.rev + ' al fornitore', 'Resend Rev. ' + d.rev + ' to supplier'], form: 'mail', sec: d.status === 'finalizzato' ? 0 : 1 }] : [];
+      if (d.status === 'finalizzato') return rs.concat(poResidual(d).some(function (x) { return x > 0; }) ? [{ to: 'finalizzato', l: ['Merce pronta: crea consegna (DN)', 'Goods ready: create delivery note'], form: 'dn', sec: d.needResend ? 1 : 0 }] : []);
+      return base.concat(rs);
     }
     if (d.type === 'DN') {
       if (d.status === 'pronta') return d.route === 'hub' ? [{ to: 'hub', l: ['Arrivata in hub', 'Arrived at hub'] }, { to: 'spedita', l: ['Spedita direttamente a bordo', 'Shipped direct to vessel'], sec: 1 }] : [{ to: 'spedita', l: ['Spedita a bordo', 'Shipped to vessel'] }];
       if (d.status === 'hub') return [{ to: 'spedita', l: ['Partita dall\'hub verso la nave', 'Left hub for the vessel'] }];
-      if (d.status === 'ricevuta') return children(d.id).some(function (x) { return x.type === 'FT'; }) ? [] : [{ to: 'ricevuta', l: ['Registra fattura fornitore', 'Book supplier invoice'], form: 'ft' }];
+      if (d.status === 'ricevuta') return children(d.id).some(function (x) { return x.type === 'FT'; }) ? [] : [{ to: 'ricevuta', l: ['Registra fattura fornitore', 'Book supplier invoice'], form: 'ft', acc: 1 }];
       return base;
     }
-    if (d.type === 'FT' && d.status === 'registrata') return [{ to: 'pagata', l: ['Segna come pagata', 'Mark as paid'] }];
+    if (d.type === 'FT' && d.status === 'registrata') return [{ to: 'pagata', l: ['Segna come pagata', 'Mark as paid'], acc: 1 }];
     return base;
   }
 
@@ -960,11 +972,12 @@
   }
   function curDoc() { var r = route(); return r.seg[0] === 'doc' ? byId(r.seg[1]) : null; }
   function editLine(el) {
-    var d = curDoc(); if (!d || !editable(d)) return;
-    var p = el.getAttribute('data-edit').split('|'), l = d.lines[+p[0]];
-    l[p[1]] = p[1] === 'qty' ? Math.max(0, parseNum(el.value)) : el.value.trim();
-    if (p[1] === 'impa') l.code = l.impa;
-    save();
+    var d = curDoc(); if (!d || !UI.edit || UI.edit.id !== d.id) return;
+    var p = el.getAttribute('data-edit').split('|'), l = d.lines[+p[0]], f = p[1];
+    l[f] = /^(qty|price|d1)$/.test(f) ? Math.max(0, parseNum(el.value)) : el.value.trim();
+    if (f === 'impa') l.code = l.impa;
+    if (d.type === 'PO' && /^(qty|price|d1)$/.test(f)) { l.net = Math.round(l.qty * l.price * disc(l) * 100) / 100; d.total = docTotal(d); }
+    UI.edit.dirty = true;
   }
 
   /* ---- comparison & award ---- */
@@ -980,7 +993,8 @@
     });
     var cols = rfqs.length;
     var head = '<div style="padding:6px 4px;font-size:12px" class="mute">' + esc(t('l_row')) + '</div>' + rfqs.map(function (r) {
-      return '<div style="padding:6px 4px;display:flex;flex-direction:column;gap:2px"><a href="#/doc/' + r.id + '" style="font-weight:700;color:var(--ink);text-decoration:none">' + esc(supName(r.sup)) + '</a><span class="j mute" style="font-size:11px">' + esc(r.num) + ' · ' + esc(r.cur) + '</span>' + chip(r) + '</div>';
+      return '<div style="padding:6px 4px;display:flex;flex-direction:column;gap:4px;align-items:flex-start"><a href="#/doc/' + r.id + '" style="font-weight:700;color:var(--ink);text-decoration:none">' + esc(supName(r.sup)) + '</a><span class="j mute" style="font-size:11px">' + esc(r.num) + ' · ' + esc(r.cur) + (r.offer && r.offer.incoterm ? ' · ' + esc(r.offer.incoterm + (r.offer.place ? ' ' + r.offer.place : '')) : '') + '</span>' + chip(r) +
+        (r.status === 'quotata' ? '<button type="button" class="btn sm" data-act="awardall" data-rfq="' + r.id + '">' + esc(L2(['Scegli tutta l\'offerta', 'Pick whole offer'])) + '</button>' : '') + '</div>';
     }).join('');
     var body = rq.lines.map(function (l) {
       return '<div style="border-top:1px solid var(--line);padding:10px 4px;display:flex;flex-direction:column;gap:2px"><div><span class="j mute" style="margin-right:6px">' + l.row + '</span><b>' + esc(l.desc) + '</b></div><div class="mute" style="font-size:12px">' + esc(l.note || '') + '</div><div class="j" style="font-size:12px">' + nf(l.qty) + ' ' + esc(l.uom) + '</div></div>' +
@@ -1061,7 +1075,7 @@
     },
     mail: function (d, to) {
       var sh = shipBy(d.ship), rq = d.from && byId(d.from[0]), sp = supById(d.sup) || {};
-      var subj = 'M/V ' + sh.name + ' · ' + (d.type === 'RFQ' ? 'RFQ ' : 'PURCHASE ORDER ') + d.num + (rq && d.type === 'RFQ' ? ' · ' + rq.num : '') + ' · ' + (sp.name || '');
+      var subj = 'M/V ' + sh.name + ' · ' + (d.type === 'RFQ' ? 'RFQ ' : 'PURCHASE ORDER ') + d.num + (d.rev ? ' REV. ' + d.rev : '') + (rq && d.type === 'RFQ' ? ' · ' + rq.num : '') + ' · ' + (sp.name || '');
       var rows = d.lines.map(function (l) {
         return l.row + '  ' + (l.impa ? 'IMPA ' + l.impa + '  ' : '') + l.desc + (l.note ? ' (' + l.note + ')' : '') + '  —  ' + nf(l.qty) + ' ' + l.uom +
           (d.type === 'PO' ? '  x ' + nf(l.price) + (l.d1 ? ' -' + nf(l.d1, 1) + '%' : '') + ' = ' + money(l.net, d.cur) + (l.cond ? '  [' + l.cond + ']' : '') : '');
@@ -1078,7 +1092,8 @@
         '<div class="mute" style="font-size:12px">' + esc(L2(['Il prototipo non invia email: copia il testo in Outlook, poi segna il documento come inviato. La firma la aggiunge Outlook.', 'The prototype sends no email: copy the text into Outlook, then mark the document as sent.'])) + '</div>',
         function (f) {
           if (f.elements.to.value) sp.email = f.elements.to.value.trim();
-          setStatus(d, to, f.elements.to.value ? 'email ' + f.elements.to.value : 'email');
+          if (d.needResend && d.status === to) { d.needResend = false; d.log.push({ at: TODAY, to: to, txt: 'Rev. ' + d.rev + ' ' + L2(['rinviata', 'resent']) + (f.elements.to.value ? ' · ' + f.elements.to.value : '') }); }
+          else setStatus(d, to, f.elements.to.value ? 'email ' + f.elements.to.value : 'email');
           if (d.type === 'RFQ') d.sentAt = TODAY;
           save(); render(); toast(L2(['Segnato come inviato', 'Marked as sent']));
         }, { w: 760, ok: L2(['Segna come inviato', 'Mark as sent']), extra: '<button type="button" class="btn" data-copy="1">' + esc(L2(['Copia testo', 'Copy text'])) + '</button>',
@@ -1101,6 +1116,14 @@
       }).join('');
       var sp = supById(d.sup) || {};
       formModal(L2(['Offerta di ', 'Offer from ']) + (sp.name || '') + ' · ' + d.num,
+        '<div class="note stack" style="gap:8px;color:var(--ink)"><b>' + esc(L2(['Dati comuni a tutte le righe', 'Data common to all rows'])) + '</b><div class="filters">' +
+        '<label>Incoterm<select name="inco">' + ['EXW', 'FCA', 'FOB', 'CFR', 'CIF', 'CPT', 'DAP', 'DDP'].map(function (x) { return '<option>' + x + '</option>'; }).join('') + '</select></label>' +
+        '<label>' + esc(L2(['Luogo di resa', 'Place'])) + '<input name="m_place" placeholder="' + esc(L2(['es. Napoli', 'e.g. Naples'])) + '"></label>' +
+        '<label>' + esc(L2(['Lead time (gg)', 'Lead time (days)'])) + '<input name="m_days" inputmode="numeric" style="width:70px"></label>' +
+        '<label>' + esc(L2(['Condizione', 'Condition'])) + '<select name="m_cond"><option value="">—</option>' + CONDS.map(function (c) { return '<option>' + c + '</option>'; }).join('') + '</select></label>' +
+        '<label>' + esc(L2(['Origine / stock', 'Origin / stock'])) + '<input name="m_orig"></label>' +
+        '<label>' + esc(t('l_disc')) + ' %<input name="m_disc" inputmode="decimal" style="width:60px"></label>' +
+        '<button type="button" class="btn" data-mass="1" style="align-self:flex-end">' + esc(L2(['Applica a tutte le righe', 'Apply to all rows'])) + '</button></div></div>' +
         '<div class="filters"><label>' + esc(t('currency')) + '<select name="cur"><option' + (d.cur === 'EUR' ? ' selected' : '') + '>EUR</option><option' + (d.cur === 'USD' ? ' selected' : '') + '>USD</option></select></label>' +
         '<label>' + esc(t('extRef')) + '<input name="ref" value=""></label><label>' + esc(t('validDays')) + '<input name="days" value="30" inputmode="numeric" style="width:70px"></label></div>' +
         '<div class="tablebox"><table class="grid edit" style="min-width:860px"><thead><tr><th>' + esc(t('l_row')) + '</th><th>' + esc(t('c_desc')) + '</th><th>' + esc(L2(['Quot.', 'Quoted'])) + '</th><th class="num">' + esc(L2(['Q.tà off.', 'Qty off.'])) + '</th><th class="num">' + esc(L2(['Prezzo unit.', 'Unit price'])) + '</th><th class="num">' + esc(t('l_disc')) + '</th><th>' + esc(L2(['Condizione', 'Condition'])) + '</th><th>' + esc(L2(['Origine / stock', 'Origin / stock'])) + '</th><th class="num">' + esc(L2(['Gg cons.', 'Days'])) + '</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
@@ -1119,13 +1142,25 @@
           d.charges = ['transport', 'packing', 'other'].map(function (k) { return { kind: k, amount: parseNum(f.elements['ch_' + k].value) }; }).filter(function (c) { return c.amount; });
           d.total = docTotal(d);
           var days = parseInt(f.elements.days.value, 10) || 30;
-          d.offer = { ref: f.elements.ref.value.trim(), date: TODAY, days: days, validTo: addDays(TODAY, days) };
+          d.offer = { ref: f.elements.ref.value.trim(), date: TODAY, days: days, validTo: addDays(TODAY, days), incoterm: f.elements.inco.value, place: f.elements.m_place.value.trim() };
           setStatus(d, 'quotata', money(d.total, d.cur));
           var rq = byId(d.from[0]);
           if (rq && rq.status === 'quotazione' && !children(rq.id).some(function (x) { return x.type === 'RFQ' && (x.status === 'creata' || x.status === 'inviata'); })) setStatus(rq, 'quotata', L2(['tutte le offerte ricevute', 'all offers received']));
           save(); render(); toast(L2(['Offerta registrata', 'Offer recorded']));
         }, { w: 1000, extra: d.demo ? '<button type="button" class="btn" data-fill="1">' + esc(L2(['Compila offerta di esempio', 'Fill sample offer'])) + '</button>' : '',
-          onClick: function (e, f) { if (e.target.getAttribute('data-fill')) demoFill(d, f); } });
+          onClick: function (e, f) {
+            if (e.target.getAttribute('data-fill')) demoFill(d, f);
+            if (e.target.getAttribute('data-mass')) {
+              var E = f.elements, place = E.m_place.value.trim();
+              d.lines.forEach(function (l, i) {
+                if (E.m_days.value !== '') E['dy' + i].value = E.m_days.value;
+                if (E.m_cond.value) E['cd' + i].value = E.m_cond.value;
+                if (E.m_orig.value || place) E['or' + i].value = (E.m_orig.value || '') + (place ? (E.m_orig.value ? ' · ' : '') + E.inco.value + ' ' + place : '');
+                if (E.m_disc.value !== '') E['dc' + i].value = E.m_disc.value;
+              });
+              toast(L2(['Applicato a ', 'Applied to ']) + d.lines.length + ' ' + L2(['righe', 'rows']));
+            }
+          } });
     },
     orders: function (rq) {
       var award = rq.award || {}, by = {};
@@ -1281,7 +1316,7 @@
         '<label>' + esc(t('c_due')) + '<input type="date" name="due" value="' + addDays(TODAY, 30) + '"></label></div>',
         function (f) {
           var d = newDoc('RQ', f.elements.ship.value, { status: 'bozza', desc: f.elements.desc.value.trim(), dept: f.elements.dept.value, prio: f.elements.prio.value, due: f.elements.due.value, side: P.seat === 'ship' ? 'ship' : 'office', lines: [] });
-          save(); location.hash = '#/doc/' + d.id;
+          save(); UI.edit = { id: d.id, snap: JSON.parse(JSON.stringify(d)), dirty: false }; location.hash = '#/doc/' + d.id;
         }, { ok: L2(['Crea', 'Create']) });
     },
     addline: function () {
@@ -1290,9 +1325,9 @@
       (DB.items || []).forEach(function (x) { if ((x.impa ? x.impa + ' · ' : '') + x.desc === v) it = x; });
       var row = d.lines.reduce(function (m, l) { return Math.max(m, l.row); }, 0) + 10;
       d.lines.push(it ? { row: row, item: it.id, code: it.code, impa: it.impa, desc: it.desc, note: '', uom: it.uom, qty: 1 } : { row: row, code: '', impa: '', desc: v.trim(), note: '', uom: 'PCE', qty: 1 });
-      save(); render();
+      UI.edit.dirty = true; render();
     },
-    delline: function (a) { var d = curDoc(); if (!d || !editable(d)) return; d.lines.splice(+a.getAttribute('data-i'), 1); save(); render(); },
+    delline: function (a) { var d = curDoc(); if (!d || !editable(d)) return; d.lines.splice(+a.getAttribute('data-i'), 1); UI.edit.dirty = true; render(); },
     award: function (a) {
       var d = curDoc(); if (!d) return; d.award = d.award || {};
       var row = a.getAttribute('data-row'), id = a.getAttribute('data-rfq');
@@ -1302,6 +1337,96 @@
     preset: function (a) { var d = curDoc(); if (!d) return; preset(d, a.getAttribute('data-k')); save(); render(); var el = document.getElementById('cmp'); if (el) el.scrollIntoView(); },
     demoreset: function () { resetDemo(); render(); toast(L2(['Pratica demo ripartita', 'Demo case restarted'])); }
   };
+
+
+  /* ---------- group A: seats, edit mode, arrivals, accounting ---------- */
+  function seatName() { return L2({ office: ['Ufficio acquisti', 'Purchasing office'], ship: ['Bordo', 'Vessel'], acc: ['Contabilità', 'Accounting'] }[P.seat] || ['Ufficio acquisti', 'Purchasing office']); }
+  function locOf(ship, item) { return item && DB.loc ? DB.loc[ship + '|' + item] : ''; }
+  function editHeader(d) {
+    var pr = d.type === 'RQ' || d.type === 'PO';
+    return '<div class="card stack" style="border-color:var(--acc)"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b>' + esc(L2(['Modifica in corso', 'Editing'])) + '</b><span style="display:flex;gap:8px"><button class="btn" data-act="editcancel">' + esc(L2(['Annulla modifiche', 'Discard changes'])) + '</button><button class="btn pri" data-act="editsave">' + esc(L2(['Salva', 'Save'])) + '</button></span></div>' +
+      '<label class="stack" style="gap:4px;font-size:13px;color:var(--mute)">' + esc(t('c_desc')) + '<input data-hedit="desc" value="' + esc(d.desc || '') + '" style="font-size:18px;font-weight:700;background:var(--bg);border:1px solid var(--line2);border-radius:8px;padding:8px 10px;color:var(--ink)"></label>' +
+      '<div class="filters">' + (d.type !== 'FT' ? '<label class="stack" style="gap:4px;font-size:13px;color:var(--mute)">' + esc(d.type === 'DN' ? t('sc_dn') : t('c_due')) + '<input type="date" data-hedit="due" value="' + esc(d.due || '') + '"></label>' : '') +
+      (pr ? '<label class="stack" style="gap:4px;font-size:13px;color:var(--mute)">' + esc(L2(['Priorità', 'Priority'])) + '<select data-hedit="prio">' + Object.keys(PRIO).map(function (k) { return '<option value="' + k + '"' + ((d.prio || 'normale') === k ? ' selected' : '') + '>' + esc(L2(PRIO[k])) + '</option>'; }).join('') + '</select></label>' : '') +
+      (d.type === 'PO' ? '<label class="stack" style="gap:4px;font-size:13px;color:var(--mute);flex:1">' + esc(t('terms')) + '<input data-hedit="terms" value="' + esc(d.terms || '') + '"></label>' : '') + '</div>' +
+      '<label class="stack" style="gap:4px;font-size:13px;color:var(--mute)">' + esc(t('note')) + '<textarea data-hedit="note" rows="2" style="background:var(--bg);border:1px solid var(--line2);border-radius:8px;padding:8px 10px;color:var(--ink)">' + esc(d.note || '') + '</textarea></label>' +
+      (d.type === 'PO' && { inviato: 1, confermato: 1, finalizzato: 1 }[d.status] ? '<div class="note" style="color:var(--amber)">' + esc(L2(['Ordine già inviato: salvando nasce la Rev. ' + ((d.rev || 0) + 1) + ', da rimandare al fornitore.', 'Order already sent: saving creates Rev. ' + ((d.rev || 0) + 1) + ', to be resent to the supplier.'])) + '</div>' : '') +
+      (d.type === 'RQ' && !linesOpen(d) ? '<div class="note">' + esc(L2(['Le righe sono bloccate perché le RFQ sono già partite.', 'Rows are locked because RFQs have been sent.'])) + '</div>' : '') + '</div>';
+  }
+  function poEditor(d) {
+    var rows = d.lines.map(function (l, i) {
+      return '<tr><td class="j">' + l.row + '</td><td>' + lineDesc(l) + '</td><td>' + esc(l.uom) + '</td>' +
+        '<td><input class="j" data-edit="' + i + '|qty" value="' + nf(l.qty) + '" inputmode="decimal" style="width:80px;text-align:right"></td>' +
+        '<td><input class="j" data-edit="' + i + '|price" value="' + nf(l.price) + '" inputmode="decimal" style="width:100px;text-align:right"></td>' +
+        '<td><input class="j" data-edit="' + i + '|d1" value="' + nf(l.d1 || 0, 1) + '" inputmode="decimal" style="width:60px;text-align:right"></td>' +
+        '<td><input type="date" data-edit="' + i + '|due" value="' + esc(l.due || '') + '"></td></tr>';
+    }).join('');
+    return '<section class="card stack"><h2>' + esc(t('lines')) + '</h2><div class="tablebox"><table class="grid edit"><thead><tr><th>' + esc(t('l_row')) + '</th><th>' + esc(t('c_desc')) + '</th><th>' + esc(t('l_uom')) + '</th><th class="num">' + esc(t('l_qty')) + '</th><th class="num">' + esc(t('l_price')) + ' ' + esc(d.cur || '') + '</th><th class="num">' + esc(t('l_disc')) + ' %</th><th>' + esc(t('l_due')) + '</th></tr></thead><tbody>' + rows + '</tbody></table></div></section>';
+  }
+  function diffDoc(a, b) {
+    var ch = [];
+    ['desc', 'due', 'prio', 'terms', 'note'].forEach(function (k) { if ((a[k] || '') !== (b[k] || '')) ch.push(k === 'desc' ? L2(['descrizione', 'description']) : k === 'due' ? L2(['data consegna', 'due date']) : k === 'prio' ? L2(['priorità', 'priority']) : k === 'terms' ? L2(['condizioni', 'terms']) : L2(['nota', 'note'])); });
+    var al = a.lines || [], bl = b.lines || [];
+    if (al.length !== bl.length) ch.push(L2(['righe ', 'rows ']) + al.length + ' → ' + bl.length);
+    bl.forEach(function (l) {
+      var o = al.filter(function (x) { return x.row === l.row; })[0]; if (!o) return;
+      ['qty', 'price', 'd1', 'desc', 'impa', 'note', 'due', 'asset', 'uom'].forEach(function (k) { if (String(o[k] == null ? '' : o[k]) !== String(l[k] == null ? '' : l[k])) ch.push(L2(['riga ', 'row ']) + l.row + ' ' + k + (/qty|price|d1/.test(k) ? ' ' + nf(o[k] || 0) + ' → ' + nf(l[k] || 0) : '')); });
+    });
+    return ch;
+  }
+  function arrivals(ship) { return docs(function (d) { return d.ship === ship && d.type === 'DN' && isOpen(d) && d.lines && d.lines.length; }).sort(function (a, b) { return (a.due || '') < (b.due || '') ? -1 : 1; }); }
+  function arrivalsTable(ship) {
+    var a = arrivals(ship);
+    if (!a.length) return '<div class="empty">' + esc(L2(['Nessuna consegna in arrivo con righe per questa nave.', 'No incoming deliveries with lines for this vessel.'])) + '</div>';
+    return '<div class="note">' + esc(L2(['La merce entra in magazzino solo quando la nave conferma la DN firmata e indica le quantità ricevute e l\'ubicazione.', 'Goods enter stores only when the vessel confirms the signed DN with received quantities and location.'])) + '</div>' +
+      '<div class="tablebox"><table class="grid"><thead><tr><th>' + esc(t('c_num')) + '</th><th>' + esc(t('c_sup')) + '</th><th>' + esc(t('c_desc')) + '</th><th class="num">' + esc(t('rows')) + '</th><th>' + esc(t('c_status')) + '</th><th>' + esc(t('sc_dn')) + '</th><th></th></tr></thead><tbody>' +
+      a.map(function (d) {
+        var btn = d.status === 'spedita' ? (P.seat === 'ship' ? '<button class="btn pri sm" data-act="recvdn" data-id="' + d.id + '">' + esc(L2(['Ricevi e carica', 'Receive and load'])) + '</button>' : '<span class="mute" style="font-size:12px">' + esc(L2(['da bordo', 'by vessel'])) + '</span>') : '<span class="mute" style="font-size:12px">' + esc(L2(['non ancora spedita', 'not shipped yet'])) + '</span>';
+        return '<tr><td>' + COLS.num.v(d) + '</td><td>' + esc(supName(d.sup)) + '</td><td><a href="#/doc/' + d.id + '">' + esc(d.desc) + '</a></td><td class="num j">' + d.lines.length + '</td><td>' + chip(d) + '</td><td class="j' + (isLate(d) ? ' t-bad' : '') + '">' + fd(d.due) + '</td><td>' + btn + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  function pageAcc(q) {
+    var tab = q.tab || 'todo';
+    var todo = docs(function (d) { return d.type === 'DN' && d.status === 'ricevuta' && d.from && byId(d.from[0]) && byId(d.from[0]).lines && !children(d.id).some(function (x) { return x.type === 'FT'; }); });
+    var fts = docs(function (d) { return d.type === 'FT'; }).sort(function (a, b) { return (a.due || '') < (b.due || '') ? -1 : 1; });
+    var tabs = '<nav class="tabs">' + [['todo', ['Da fatturare', 'To invoice'], todo.length], ['open', ['Fatture da pagare', 'Invoices to pay'], fts.filter(isOpen).length], ['all', ['Tutte le fatture', 'All invoices'], fts.length]].map(function (x) { return '<a class="' + (tab === x[0] ? 'on' : '') + '" href="#/contabilita' + qs({ tab: x[0] }) + '">' + esc(L2(x[1])) + '<span class="j">' + x[2] + '</span></a>'; }).join('') + '</nav>';
+    var body;
+    if (tab === 'todo') {
+      body = todo.length ? '<div class="tablebox"><table class="grid"><thead><tr><th>' + esc(t('c_num')) + '</th><th>' + esc(t('c_ship')) + '</th><th>' + esc(t('c_sup')) + '</th><th>' + esc(t('c_desc')) + '</th><th>' + esc(L2(['Ordine', 'Order'])) + '</th><th class="num">' + esc(L2(['Valore ricevuto', 'Received value'])) + '</th><th></th></tr></thead><tbody>' +
+        todo.map(function (d) {
+          var po = byId(d.from[0]), v = 0;
+          d.lines.forEach(function (l) { var pl = po.lines.filter(function (x) { return x.row === l.src; })[0]; if (pl && l.recv) v += l.recv * pl.price * disc(pl); });
+          return '<tr><td>' + COLS.num.v(d) + '</td><td>' + COLS.ship.v(d) + '</td><td>' + esc(supName(d.sup)) + '</td><td><a href="#/doc/' + d.id + '">' + esc(d.desc) + '</a></td><td class="j">' + esc(po.num) + '</td><td class="num j">' + money(v, po.cur) + '</td><td>' +
+            (P.seat === 'acc' ? '<button class="btn pri sm" data-act="ftfor" data-id="' + d.id + '">' + esc(L2(['Registra fattura', 'Book invoice'])) + '</button>' : '<span class="mute" style="font-size:12px">' + esc(L2(['postazione Contabilità', 'Accounting station'])) + '</span>') + '</td></tr>';
+        }).join('') + '</tbody></table></div>' : '<div class="empty">' + esc(L2(['Nessuna consegna ricevuta in attesa di fattura.', 'No received delivery awaiting invoice.'])) + '</div>';
+    } else body = gridTable(tab === 'open' ? fts.filter(isOpen) : fts, ['num', 'ship', 'desc', 'sup', 'status', 'total', 'eur', 'date', 'due'], null, null);
+    var note = '<div class="note">' + esc(L2(['Le fatture si registrano dopo la DN timbrata e firmata da bordo. Le spese extra (trasporto, hub, dogana, banca) vanno sul conto di budget scelto. Gli acquisti vedono solo lo stato.', 'Invoices are booked after the DN is stamped and signed on board. Extra charges go to the chosen budget account. Purchasing only sees the status.'])) + '</div>';
+    return shell('contabilita', crumb([[t('fleet'), '#/']]), L2(['Contabilità', 'Accounting']), (P.seat !== 'acc' ? '<div class="note" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">' + esc(L2(['Stai guardando come ', 'Viewing as '])) + '<b>' + esc(seatName()) + '</b><button class="btn sm" data-act="seat" data-to="acc">' + esc(L2(['Passa a Contabilità', 'Switch to Accounting'])) + '</button></div>' : '') + tabs + body + note);
+  }
+  CLICK.editstart = function () { var d = curDoc(); if (!d) return; if (UI.edit && UI.edit.id !== d.id) { toast(L2(['Prima salva o annulla l\'altra modifica', 'Save or discard the other edit first'])); return; } UI.edit = { id: d.id, snap: JSON.parse(JSON.stringify(d)), dirty: false }; render(); };
+  CLICK.editcancel = function () {
+    var d = curDoc(); if (!d || !UI.edit) return;
+    var i = DB.docs.indexOf(d); if (i >= 0) DB.docs[i] = UI.edit.snap;
+    UI.edit = null; render(); toast(L2(['Modifiche annullate', 'Changes discarded']));
+  };
+  CLICK.editsave = function () {
+    var d = curDoc(); if (!d || !UI.edit) return;
+    var ch = diffDoc(UI.edit.snap, d);
+    if (!ch.length) { UI.edit = null; render(); toast(L2(['Nessuna modifica', 'No changes'])); return; }
+    if (d.type === 'PO' && d.lines) { d.total = docTotal(d); }
+    var revd = d.type === 'PO' && { inviato: 1, confermato: 1, finalizzato: 1 }[d.status];
+    if (revd) { d.rev = (d.rev || 0) + 1; d.needResend = true; }
+    d.log = d.log || [];
+    d.log.push({ at: TODAY, to: d.status, txt: (revd ? 'Rev. ' + d.rev + ' · ' : '') + L2(['Modificato: ', 'Edited: ']) + ch.slice(0, 6).join(', ') + (ch.length > 6 ? ' …' : '') });
+    UI.edit = null; save(); render(); toast(L2(['Salvato', 'Saved']) + (revd ? ' · Rev. ' + d.rev : ''));
+  };
+  CLICK.awardall = function (a) {
+    var d = curDoc(); if (!d) return; var r = byId(a.getAttribute('data-rfq')); d.award = d.award || {};
+    r.lines.forEach(function (x) { if (x.quoted) d.award[x.src] = r.id; });
+    save(); render(); var el = document.getElementById('cmp'); if (el) el.scrollIntoView();
+  };
+  CLICK.recvdn = function (a) { var d = byId(a.getAttribute('data-id')); if (d) receiveModal(d); };
+  CLICK.ftfor = function (a) { var d = byId(a.getAttribute('data-id')); if (d) FORMS.ft(d); };
 
   /* ---------- global search ---------- */
   function searchAll(q) {
@@ -1341,6 +1466,7 @@
     else if (s[0] === 'magazzino') html = pageStores(r.q);
     else if (s[0] === 'articolo') html = pageItem(s[1], r.q);
     else if (s[0] === 'dati') html = pageData();
+    else if (s[0] === 'contabilita') html = pageAcc(r.q);
     else html = pageHome();
     var active = document.activeElement, keepFilter = active && active.getAttribute && active.getAttribute('data-filter') === 'q' ? active.selectionStart : null;
     root.innerHTML = html;
@@ -1352,7 +1478,8 @@
     var h = '#/' + r.seg.join('/') + qs(q);
     history.replaceState(null, '', h); render();
   }
-  window.addEventListener('hashchange', function () { UI.colOpen = false; render(); window.scrollTo(0, 0); });
+  window.addEventListener('hashchange', function () { UI.colOpen = false; render(); window.scrollTo(0, 0); if (UI.edit && route().seg[1] !== UI.edit.id) toast(L2(['Hai una modifica non salvata: torna al documento per salvarla o annullarla.', 'You have an unsaved edit: go back to the document to save or cancel it.'])); });
+  window.addEventListener('beforeunload', function (e) { if (UI.edit && UI.edit.dirty) { e.preventDefault(); e.returnValue = ''; } });
 
   root.addEventListener('click', function (e) {
     var a = e.target.closest('[data-act]');
@@ -1369,7 +1496,7 @@
       var tipo = r.q.tipo || 'RQ', k = a.getAttribute('data-k'), cur = P.sort[tipo] || { k: 'date', d: -1 };
       P.sort[tipo] = { k: k, d: cur.k === k ? -cur.d : 1 }; savePrefs(); render();
     }
-    else if (act === 'seat') { P.seat = P.seat === 'ship' ? 'office' : 'ship'; savePrefs(); render(); toast(t(P.seat === 'ship' ? 'seatShip' : 'seatOffice')); }
+    else if (act === 'seat') { P.seat = a.getAttribute('data-to') || 'ship'; savePrefs(); render(); toast(L2(['Postazione: ', 'Station: ']) + seatName()); }
     else if (act === 'consume' || act === 'count') { stockModal(act, a.getAttribute('data-item'), a.getAttribute('data-ship')); }
     else if (act === 'reorder') { reorder(a.getAttribute('data-ship')); }
     else if (CLICK[act]) { CLICK[act](a, r); }
@@ -1415,6 +1542,8 @@
     }
     if (el.getAttribute('data-act') === 'zero') { UI.showZero = el.checked; render(); return; }
     if (el.getAttribute('data-edit')) { editLine(el); return; }
+    if (el.getAttribute('data-hedit')) { var dh = curDoc(); if (dh && UI.edit && UI.edit.id === dh.id) { var hf = el.getAttribute('data-hedit'); dh[hf] = el.value; UI.edit.dirty = true; } return; }
+    if (el.id === 'seatsel') { P.seat = el.value; savePrefs(); render(); toast(L2(['Postazione: ', 'Station: ']) + seatName()); return; }
     if (el.getAttribute('data-act') === 'minstock') { var k2 = el.getAttribute('data-k'); DB.stock = DB.stock || {}; DB.stock[k2] = Math.max(0, parseNum(el.value)); save(); render(); toast(t('minSaved')); return; }
     if (el.getAttribute('data-act') === 'import') {
       var f = el.files && el.files[0]; if (!f) return;
