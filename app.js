@@ -258,7 +258,7 @@
       railLink('#/budget' + qs({ nave: ship || 'PEP' }), 'chart', t('budget'), active === 'budget') +
       railLink('#/fornitori', 'ppl', t('suppliers'), active === 'fornitori') +
       railLink('#/contabilita', 'doc', L2(['Contabilità', 'Accounting']), active === 'contabilita') +
-      '<div class="sp"></div>' + railLink('#/dati', 'db', t('data'), active === 'dati') +
+      '<div class="sp"></div>' + railLink('#/impostazioni', 'doc', L2(['Modelli', 'Templates']), active === 'impostazioni') + railLink('#/dati', 'db', t('data'), active === 'dati') +
       '</nav><div class="main"><header class="top">' +
       '<div class="crumbs"><small>' + crumbs + '</small><b>' + esc(title) + '</b></div>' +
       '<div class="search"><label>' + ico('search') + '<input id="gsearch" type="search" autocomplete="off" aria-label="' + esc(t('search')) + '" placeholder="' + esc(t('search')) + '"><span class="kbd j">Ctrl K</span></label><div id="gres"></div></div>' +
@@ -503,6 +503,7 @@
       (d.prio && d.prio !== 'normale' ? '<span class="chip c-bad">' + esc(L2(PRIO[d.prio])) + '</span>' : '') + (d.demo ? '<span class="chip c-acc">DEMO</span>' : '') +
       '<span class="chip c-neutral">' + esc(t('c_side')) + ': ' + esc(t(d.side)) + '</span>' + (d.dept ? '<span class="chip c-neutral">' + esc(t(d.dept)) + '</span>' : '') +
       (d.rev ? '<span class="chip c-warn">Rev. ' + d.rev + '</span>' : '') +
+      ((d.type === 'RFQ' || d.type === 'PO') && d.lines && d.lines.length ? '<button class="btn sm" data-act="pdf">PDF</button>' : '') +
       (UI.edit && UI.edit.id === d.id ? '' : '<button class="btn sm" data-act="editstart">' + esc(L2(['Modifica', 'Edit'])) + '</button>') + '</div>' +
       (UI.edit && UI.edit.id === d.id ? editHeader(d) : '<h1 class="h1">' + esc(d.desc || '—') + '</h1>' + (d.note ? '<div class="note">' + esc(d.note) + '</div>' : '')) + '</div>';
     var body = '<div class="row">' + pathHtml +
@@ -1428,6 +1429,215 @@
   CLICK.recvdn = function (a) { var d = byId(a.getAttribute('data-id')); if (d) receiveModal(d); };
   CLICK.ftfor = function (a) { var d = byId(a.getAttribute('data-id')); if (d) FORMS.ft(d); };
 
+
+  /* ---------- group B: PDF documents and Outlook drafts ---------- */
+  var TPL_DEF = {
+    company: { name: '', address: '', phone: '', email: '', web: '' },
+    invoiceTo: { name: '', address: '', email: '' },
+    color: '#1f2328', logo: '', footer: '',
+    RFQ: { title: 'REQUEST FOR QUOTATION', intro: 'Dear Sirs,\nKindly quote your best price, availability, delivery time, place of origin / stock and condition (Genuine, Non genuine or Reconditioned) for the items listed below. Please quote our RFQ number in all correspondence.',
+      closing: 'This inquiry is a request for quotation only and is NOT a purchase order.', clauses: 'All items must be asbestos free as per SOLAS regulation II-1/3-5 and supplied with MD/SDoC.',
+      cols: { impa: 1, note: 1, asset: 1, fill: 1 } },
+    PO: { title: 'PURCHASE ORDER', intro: 'Dear Sirs,\nPlease supply the items listed below as per your quotation and the terms of this order. Kindly confirm acceptance and delivery date by return.',
+      closing: 'Invoice to be issued only after delivery on board and receipt of the signed delivery note. Please quote our PO number on the invoice and on all documents.',
+      clauses: 'All items must be asbestos free as per SOLAS regulation II-1/3-5 and supplied with MD/SDoC.\nEach package to be marked with vessel name and PO number.',
+      cols: { impa: 1, note: 1, asset: 1, cond: 1, due: 1 } }
+  };
+  function tpl() {
+    var s = DB.settings || {}, o = JSON.parse(JSON.stringify(TPL_DEF));
+    ['company', 'invoiceTo'].forEach(function (k) { if (s[k]) for (var x in s[k]) o[k][x] = s[k][x]; });
+    ['color', 'logo', 'footer'].forEach(function (k) { if (s[k] != null) o[k] = s[k]; });
+    ['RFQ', 'PO'].forEach(function (k) { if (s[k]) { for (var x in s[k]) if (x !== 'cols') o[k][x] = s[k][x]; if (s[k].cols) o[k].cols = s[k].cols; } });
+    return o;
+  }
+  var libP = null;
+  function loadPdfLib() {
+    if (window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API.autoTable) return Promise.resolve();
+    if (libP) return libP;
+    function load(src) { return new Promise(function (ok, ko) { var s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = function () { ko(new Error('load ' + src)); }; document.head.appendChild(s); }); }
+    libP = load('lib/jspdf.umd.min.js').then(function () { return load('lib/jspdf.plugin.autotable.min.js'); });
+    return libP;
+  }
+  function pdfTxt(s) { return String(s == null ? '' : s).replace(/[→]/g, '->').replace(/[–—]/g, '-').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[^\x00-\xFF€]/g, '?'); }
+  function hexRgb(h) { h = (h || '#1f2328').replace('#', ''); return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16)]; }
+  function pdfMoney(v, cur) { return (v || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (cur === 'USD' ? ' USD' : ' EUR'); }
+  function pdfDate(s) { return s ? fd(s) : '-'; }
+  function buildPdf(d) {
+    var T = tpl(), K = T[d.type], col = hexRgb(T.color), sh = shipBy(d.ship), sp = supById(d.sup) || {}, rq = null;
+    var cur = d.from && d.from[0] ? byId(d.from[0]) : null; while (cur && cur.type !== 'RQ' && cur.from && cur.from[0]) cur = byId(cur.from[0]); if (cur && cur.type === 'RQ') rq = cur;
+    var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), W = 210, M = 14, y = 14;
+    doc.setFont('helvetica', 'normal');
+    // header
+    var lx = M;
+    if (T.logo) { try { var fmt = /^data:image\/png/.test(T.logo) ? 'PNG' : 'JPEG'; var p = doc.getImageProperties(T.logo), h = 16, w = Math.min(45, p.width * h / p.height); doc.addImage(T.logo, fmt, M, y - 2, w, h); lx = M + w + 4; } catch (e) {} }
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.text(pdfTxt(T.company.name || ' '), lx, y + 2);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+    var cl = [T.company.address, [T.company.phone ? 'Tel. ' + T.company.phone : '', T.company.email].filter(Boolean).join('  ·  '), T.company.web].filter(Boolean);
+    cl.forEach(function (l, i) { doc.text(pdfTxt(l), lx, y + 6 + i * 3.6); });
+    doc.setTextColor(col[0], col[1], col[2]); doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
+    doc.text(pdfTxt(K.title), W - M, y + 2, { align: 'right' });
+    doc.setTextColor(30, 30, 30); doc.setFontSize(10);
+    doc.text(pdfTxt(d.num + (d.rev ? '  REV. ' + d.rev : '')), W - M, y + 8, { align: 'right' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+    doc.text(pdfTxt('Date ' + pdfDate(d.type === 'RFQ' ? (d.sentAt || TODAY) : TODAY)), W - M, y + 12.5, { align: 'right' });
+    y += 22;
+    doc.setDrawColor(col[0], col[1], col[2]); doc.setLineWidth(0.6); doc.line(M, y, W - M, y); y += 6;
+    // boxes
+    function box(x, w, title, lines) {
+      doc.setFontSize(7.5); doc.setTextColor(110, 110, 110); doc.text(pdfTxt(title.toUpperCase()), x, y);
+      doc.setTextColor(30, 30, 30); doc.setFontSize(9);
+      var yy = y + 4.5; lines.forEach(function (l, i) { doc.setFont('helvetica', i === 0 ? 'bold' : 'normal'); var tl = doc.splitTextToSize(pdfTxt(l), w); doc.text(tl, x, yy); yy += tl.length * 4; });
+      return yy;
+    }
+    var y1 = box(M, 85, 'Supplier', [sp.name || '', sp.email || '']);
+    var info = [['Vessel', 'M/V ' + sh.name], ['Requisition', rq ? rq.num : '-'], ['Department', d.dept && L[d.dept] ? L[d.dept][1] : (d.dept || '-')], ['Currency', d.cur || '-']];
+    if (d.type === 'RFQ') info.push(['Quotation limit', pdfDate(d.limit)], ['Required on board', pdfDate(d.due || (rq && rq.due))]);
+    else info.push(['Delivery', pdfDate(d.due)], ['Terms', d.terms || '-'], ['Your quotation', d.offerRef || '-']);
+    doc.setFontSize(8.5); var yi = y;
+    info.forEach(function (r) { doc.setTextColor(110, 110, 110); doc.text(pdfTxt(r[0]), 112, yi); doc.setTextColor(30, 30, 30); var tl = doc.splitTextToSize(pdfTxt(r[1]), 52); doc.text(tl, 144, yi); yi += Math.max(1, tl.length) * 4; });
+    y = Math.max(y1, yi) + 2;
+    if (d.type === 'PO' && (T.invoiceTo.name || T.invoiceTo.address)) { y = box(M, 85, 'Invoice to', [T.invoiceTo.name, T.invoiceTo.address, T.invoiceTo.email].filter(Boolean)) + 2; }
+    y += 2;
+    doc.setFontSize(9); doc.setTextColor(30, 30, 30); doc.setFont('helvetica', 'normal');
+    var it = doc.splitTextToSize(pdfTxt(K.intro || ''), W - 2 * M); doc.text(it, M, y); y += it.length * 4 + 3;
+    // table
+    var C = K.cols || {}, head = ['Row'], body = [];
+    if (C.impa) head.push('IMPA / Code');
+    head.push('Description');
+    if (C.asset) head.push('Asset');
+    head.push('Qty', 'UOM');
+    if (d.type === 'PO') { head.push('Unit price', 'Disc.', 'Amount'); if (C.cond) head.push('Cond.'); if (C.due) head.push('Delivery'); }
+    else if (C.fill) head.push('Unit price', 'Disc.', 'LT days', 'Cond.');
+    d.lines.forEach(function (l) {
+      var r = [String(l.row)];
+      if (C.impa) r.push(l.impa || (l.code && l.code !== 'GI0001' ? l.code : ''));
+      r.push(pdfTxt(l.desc + (C.note && l.note ? '\n' + l.note : '')));
+      if (C.asset) r.push(pdfTxt(l.asset || ''));
+      r.push((l.qty || 0).toLocaleString('en-GB', { maximumFractionDigits: 2 }), l.uom || '');
+      if (d.type === 'PO') { r.push((l.price || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 4 }), l.d1 ? l.d1 + '%' : '', (l.net || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })); if (C.cond) r.push(l.cond || ''); if (C.due) r.push(pdfDate(l.due)); }
+      else if (C.fill) r.push('', '', '', '');
+      body.push(r);
+    });
+    doc.autoTable({ startY: y, head: [head], body: body, margin: { left: M, right: M }, theme: 'grid',
+      styles: { font: 'helvetica', fontSize: 8, cellPadding: 1.6, lineColor: [210, 210, 210], lineWidth: 0.2, textColor: [30, 30, 30], valign: 'top' },
+      headStyles: { fillColor: col, textColor: [255, 255, 255], fontStyle: 'bold' },
+      columnStyles: (function () { var o = {}, di = head.indexOf('Description'); o[di] = { cellWidth: 'auto' }; head.forEach(function (h, i) { if (/Qty|Unit price|Disc\.|Amount|LT days/.test(h)) o[i] = { halign: 'right' }; if (h === 'Description') o[i] = { cellWidth: d.type === 'PO' ? 56 : 66 }; if (h === 'IMPA / Code') o[i] = { cellWidth: 19 }; if (h === 'Asset') o[i] = { cellWidth: 26 }; if (h === 'Cond.') o[i] = { cellWidth: 19 }; if (h === 'Delivery') o[i] = { cellWidth: 19 }; }); return o; })() });
+    y = doc.lastAutoTable.finalY + 4;
+    if (d.type === 'PO') {
+      var goods = d.lines.reduce(function (a, l) { return a + (l.net || 0); }, 0), rows = [['Goods', pdfMoney(goods, d.cur)]];
+      (d.charges || []).filter(function (c) { return c.amount; }).forEach(function (c) { rows.push([pdfTxt(L2(['', ''])) + ({ transport: 'Transport', packing: 'Packing', other: 'Other charges' }[c.kind] || c.kind), pdfMoney(c.amount, d.cur)]); });
+      rows.push(['TOTAL', pdfMoney(d.total, d.cur)]);
+      doc.autoTable({ startY: y, body: rows, margin: { left: W - M - 80, right: M }, theme: 'plain', styles: { fontSize: 9, cellPadding: 1.2 }, columnStyles: { 1: { halign: 'right' } },
+        didParseCell: function (h) { if (h.row.index === rows.length - 1) { h.cell.styles.fontStyle = 'bold'; h.cell.styles.textColor = col; } } });
+      y = doc.lastAutoTable.finalY + 4;
+    }
+    function para(txt, size, bold) { if (!txt) return; doc.setFontSize(size); doc.setFont('helvetica', bold ? 'bold' : 'normal'); var tl = doc.splitTextToSize(pdfTxt(txt), W - 2 * M); if (y + tl.length * 4 > 280) { doc.addPage(); y = 18; } doc.text(tl, M, y); y += tl.length * (size / 2.4) + 3; }
+    para(K.closing, 9, true);
+    para(K.clauses, 8, false);
+    var n = doc.getNumberOfPages();
+    for (var i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(7); doc.setTextColor(120, 120, 120); doc.text(pdfTxt((T.footer ? T.footer + '  ·  ' : '') + d.num + '  ·  Page ' + i + '/' + n), W / 2, 290, { align: 'center' }); }
+    return doc;
+  }
+  function pdfName(d) { return (d.type === 'RFQ' ? 'RFQ_' : 'PO_') + d.num.replace(/\//g, '-') + (d.rev ? '_REV' + d.rev : '') + '.pdf'; }
+  function saveBlob(blob, name) {
+    var u = URL.createObjectURL(blob), a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(u); }, 4000);
+  }
+  function pdfPreview(d) {
+    loadPdfLib().then(function () {
+      var doc = buildPdf(d), blob = doc.output('blob'), u = URL.createObjectURL(blob);
+      var bg = document.createElement('div'); bg.className = 'modal-bg';
+      bg.innerHTML = '<div class="modal" style="width:min(1000px,100%);height:92vh" role="dialog" aria-modal="true" aria-label="PDF"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3>' + esc(pdfName(d)) + '</h3><span style="display:flex;gap:8px"><button class="btn" data-dl="1">' + esc(L2(['Scarica PDF', 'Download PDF'])) + '</button><a class="btn" href="#/impostazioni">' + esc(L2(['Modifica modello', 'Edit template'])) + '</a><button class="btn" data-x="1">' + esc(t('close')) + '</button></span></div><iframe title="PDF" src="' + u + '" style="flex:1;width:100%;border:1px solid var(--line);border-radius:8px;background:#fff"></iframe></div>';
+      document.body.appendChild(bg);
+      bg.addEventListener('click', function (e) { if (e.target === bg || e.target.getAttribute('data-x') || e.target.closest('a')) { bg.remove(); URL.revokeObjectURL(u); } if (e.target.getAttribute('data-dl')) saveBlob(blob, pdfName(d)); });
+    }).catch(function () { toast(L2(['Libreria PDF non disponibile', 'PDF library not available'])); });
+  }
+  function b64utf8(s) { return btoa(unescape(encodeURIComponent(s))).replace(/.{76}/g, '$&\r\n'); }
+  function encHeader(s) { return /[^\x20-\x7E]/.test(s) ? '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?=' : s; }
+  function buildEml(to, subj, body, pdfB64, name) {
+    var bd = '----=_FleetAsset_' + Date.now();
+    return ['X-Unsent: 1', 'To: ' + to, 'Subject: ' + encHeader(subj), 'MIME-Version: 1.0', 'Content-Type: multipart/mixed; boundary="' + bd + '"', '',
+      '--' + bd, 'Content-Type: text/plain; charset="utf-8"', 'Content-Transfer-Encoding: base64', '', b64utf8(body), '',
+      '--' + bd, 'Content-Type: application/pdf; name="' + name + '"', 'Content-Transfer-Encoding: base64', 'Content-Disposition: attachment; filename="' + name + '"', '', pdfB64.replace(/.{76}/g, '$&\r\n'), '',
+      '--' + bd + '--', ''].join('\r\n');
+  }
+  FORMS.mail = function (d, to) {
+    var sh = shipBy(d.ship), rq = d.from && byId(d.from[0]), sp = supById(d.sup) || {};
+    var subj = 'M/V ' + sh.name + ' · ' + (d.type === 'RFQ' ? 'RFQ ' : 'PURCHASE ORDER ') + d.num + (d.rev ? ' REV. ' + d.rev : '') + (rq && d.type === 'RFQ' ? ' · ' + rq.num : '') + ' · ' + (sp.name || '');
+    var body = d.type === 'RFQ'
+      ? 'Dear Sirs,\n\nPlease find attached our Request for Quotation ' + d.num + ' for M/V ' + sh.name + '.\nKindly revert by ' + fd(d.limit) + ' with your best offer, stating price, availability, delivery time, place of origin / stock and condition (Genuine, Non genuine or Reconditioned) for each item.\n\nThis inquiry is a request for quotation only and is NOT a purchase order. Kindly quote our RFQ number in all correspondence.\n\nBest regards'
+      : 'Dear Sirs,\n\nPlease find attached our Purchase Order ' + d.num + (d.rev ? ' Rev. ' + d.rev + ', which supersedes the previous version' : '') + ' for M/V ' + sh.name + (d.offerRef ? ', as per your quotation ' + d.offerRef : '') + '.\nKindly confirm acceptance, delivery date and dispatch details by return.\n\nBest regards';
+    var name = pdfName(d);
+    formModal(L2(['Email al fornitore', 'Email to supplier']) + ' · ' + d.num,
+      '<label>' + esc(L2(['A', 'To'])) + '<input name="to" type="email" value="' + esc(sp.email || '') + '" placeholder="email@fornitore"></label>' +
+      '<label>' + esc(L2(['Oggetto', 'Subject'])) + '<input name="subj" value="' + esc(subj) + '"></label>' +
+      '<label>' + esc(L2(['Testo', 'Body'])) + '<textarea name="body" rows="9" class="j" style="font-size:12px">' + esc(body) + '</textarea></label>' +
+      '<div class="note" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:var(--ink)"><span>' + esc(L2(['Allegato', 'Attachment'])) + ': <b class="j">' + esc(name) + '</b></span><button type="button" class="btn sm" data-pv="1">' + esc(L2(['Anteprima PDF', 'Preview PDF'])) + '</button></div>' +
+      '<div class="mute" style="font-size:12px">' + esc(L2(['"Bozza Outlook" scarica un file .eml: aprilo e Outlook mostra il messaggio pronto con il PDF allegato, da controllare e inviare. Poi torna qui e segna come inviato.', '"Outlook draft" downloads an .eml file: open it and Outlook shows the message ready with the PDF attached. Then mark as sent here.'])) + '</div>',
+      function (f) {
+        if (f.elements.to.value) sp.email = f.elements.to.value.trim();
+        if (d.needResend && d.status === to) { d.needResend = false; d.log.push({ at: TODAY, to: to, txt: 'Rev. ' + d.rev + ' ' + L2(['rinviata', 'resent']) + (f.elements.to.value ? ' · ' + f.elements.to.value : '') }); }
+        else setStatus(d, to, (f.elements.to.value ? 'email ' + f.elements.to.value : 'email') + ' · ' + name);
+        if (d.type === 'RFQ') d.sentAt = TODAY;
+        save(); render(); toast(L2(['Segnato come inviato', 'Marked as sent']));
+      }, { w: 760, ok: L2(['Segna come inviato', 'Mark as sent']),
+        extra: '<button type="button" class="btn pri" data-eml="1">' + esc(L2(['Bozza Outlook (.eml)', 'Outlook draft (.eml)'])) + '</button><button type="button" class="btn" data-copy="1">' + esc(L2(['Copia testo', 'Copy text'])) + '</button>',
+        onClick: function (e, f) {
+          if (e.target.getAttribute('data-pv')) pdfPreview(d);
+          if (e.target.getAttribute('data-copy')) { var txt = f.elements.subj.value + '\n\n' + f.elements.body.value; try { navigator.clipboard.writeText(txt).then(function () { toast(L2(['Testo copiato', 'Text copied'])); }, function () { f.elements.body.select(); }); } catch (x) { f.elements.body.select(); } }
+          if (e.target.getAttribute('data-eml')) {
+            loadPdfLib().then(function () {
+              var pdf = buildPdf(d).output('datauristring').split(',')[1];
+              var eml = buildEml(f.elements.to.value.trim(), f.elements.subj.value, f.elements.body.value.replace(/\n/g, '\r\n'), pdf, name);
+              saveBlob(new Blob([eml], { type: 'message/rfc822' }), name.replace(/\.pdf$/, '.eml'));
+              d.log = d.log || []; d.log.push({ at: TODAY, to: d.status, txt: L2(['Bozza Outlook creata', 'Outlook draft created']) + ' · ' + name }); save();
+              toast(L2(['Bozza scaricata: aprila con Outlook', 'Draft downloaded: open it with Outlook']));
+            }).catch(function () { toast(L2(['Libreria PDF non disponibile', 'PDF library not available'])); });
+          }
+        } });
+  };
+  CLICK.pdf = function () { var d = curDoc(); if (d) pdfPreview(d); };
+
+  function pageSettings() {
+    var T = tpl();
+    function inp(path, v, ph, wide) { return '<input data-set="' + path + '" value="' + esc(v || '') + '" placeholder="' + esc(ph || '') + '" style="' + (wide ? 'flex:1;min-width:260px' : '') + '">'; }
+    function area(path, v, rows) { return '<textarea data-set="' + path + '" rows="' + (rows || 3) + '" style="width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:8px;padding:8px 10px;color:var(--ink);font:inherit">' + esc(v || '') + '</textarea>'; }
+    function lab(l, html) { return '<label class="stack" style="gap:4px;font-size:13px;color:var(--mute);flex:1 1 220px">' + esc(l) + html + '</label>'; }
+    function colBox(type, k, l) { return '<label class="tog"><input type="checkbox" data-setcol="' + type + '|' + k + '"' + (T[type].cols[k] ? ' checked' : '') + '> ' + esc(l) + '</label>'; }
+    var sample = function (type) { return docs(function (x) { return x.type === type && x.lines && x.lines.length; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; })[0]; };
+    var sec = function (type, label, cols) {
+      var s = sample(type);
+      return '<section class="card stack"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2>' + esc(label) + '</h2>' + (s ? '<button class="btn sm" data-act="pdfsample" data-id="' + s.id + '">' + esc(L2(['Anteprima su ', 'Preview on '])) + esc(s.num) + '</button>' : '') + '</div>' +
+        '<div class="filters">' + lab(L2(['Titolo del documento', 'Document title']), inp(type + '.title', T[type].title)) + '</div>' +
+        lab(L2(['Testo di apertura', 'Opening text']), area(type + '.intro', T[type].intro, 3)) +
+        lab(L2(['Testo di chiusura', 'Closing text']), area(type + '.closing', T[type].closing, 2)) +
+        lab(L2(['Clausole fisse (una per riga)', 'Fixed clauses (one per line)']), area(type + '.clauses', T[type].clauses, 3)) +
+        '<div class="filters"><span class="mute" style="font-size:13px">' + esc(L2(['Colonne', 'Columns'])) + '</span>' + cols + '</div></section>';
+    };
+    var body = '<section class="card stack"><h2>' + esc(L2(['Intestazione', 'Letterhead'])) + '</h2>' +
+      '<div class="filters">' + lab(L2(['Società', 'Company']), inp('company.name', T.company.name, 'Ragione sociale')) + lab(L2(['Indirizzo', 'Address']), inp('company.address', T.company.address)) + '</div>' +
+      '<div class="filters">' + lab(L2(['Telefono', 'Phone']), inp('company.phone', T.company.phone)) + lab('Email', inp('company.email', T.company.email)) + lab('Web', inp('company.web', T.company.web)) + '</div>' +
+      '<div class="filters">' + lab(L2(['Logo (PNG o JPG, max 300 KB)', 'Logo (PNG or JPG, max 300 KB)']), '<input type="file" accept="image/png,image/jpeg" data-act="logo">') +
+      (T.logo ? '<img src="' + T.logo + '" alt="Logo" style="max-height:48px;max-width:160px;background:#fff;padding:4px;border-radius:6px">' + '<button class="btn sm ghost" data-act="logodel">' + esc(L2(['Rimuovi logo', 'Remove logo'])) + '</button>' : '') +
+      lab(L2(['Colore', 'Colour']), '<input type="color" data-set="color" value="' + esc(T.color) + '" style="width:60px;height:36px;padding:2px">') + '</div>' +
+      '<div class="filters">' + lab(L2(['Fatturare a (solo ordini)', 'Invoice to (orders only)']), inp('invoiceTo.name', T.invoiceTo.name)) + lab(L2(['Indirizzo fatturazione', 'Invoice address']), inp('invoiceTo.address', T.invoiceTo.address)) + lab(L2(['Email fatture', 'Invoice email']), inp('invoiceTo.email', T.invoiceTo.email)) + '</div>' +
+      lab(L2(['Piè di pagina', 'Footer']), inp('footer', T.footer, '', true)) + '</section>' +
+      sec('RFQ', L2(['Richiesta di offerta (RFQ)', 'Request for quotation (RFQ)']), colBox('RFQ', 'impa', 'IMPA / Code') + colBox('RFQ', 'note', L2(['Nota / P/N', 'Note / P/N'])) + colBox('RFQ', 'asset', 'Asset') + colBox('RFQ', 'fill', L2(['Colonne vuote per il fornitore', 'Blank columns for the supplier']))) +
+      sec('PO', L2(['Ordine (PO)', 'Purchase order (PO)']), colBox('PO', 'impa', 'IMPA / Code') + colBox('PO', 'note', L2(['Nota / P/N', 'Note / P/N'])) + colBox('PO', 'asset', 'Asset') + colBox('PO', 'cond', L2(['Condizione', 'Condition'])) + colBox('PO', 'due', L2(['Consegna', 'Delivery']))) +
+      '<div class="note">' + esc(L2(['Le modifiche si salvano subito e valgono per tutti i PDF e le bozze Outlook generate da qui in avanti.', 'Changes are saved immediately and apply to all PDFs and Outlook drafts generated from now on.'])) + '</div>' +
+      '<div><button class="btn link" data-act="tplreset">' + esc(L2(['Ripristina modello predefinito', 'Reset to default template'])) + '</button></div>';
+    return shell('impostazioni', crumb([[t('fleet'), '#/']]), L2(['Modelli documenti', 'Document templates']), body);
+  }
+  function setPath(path, val) {
+    DB.settings = DB.settings || {};
+    var p = path.split('.'), o = DB.settings;
+    if (p.length === 1) o[p[0]] = val; else { o[p[0]] = o[p[0]] || {}; o[p[0]][p[1]] = val; }
+    save();
+  }
+  CLICK.pdfsample = function (a) { var d = byId(a.getAttribute('data-id')); if (d) pdfPreview(d); };
+  CLICK.logodel = function () { setPath('logo', ''); render(); };
+  CLICK.tplreset = function () { var keep = DB.settings || {}; DB.settings = { company: keep.company, invoiceTo: keep.invoiceTo, logo: keep.logo }; save(); render(); toast(L2(['Testi e colonne ripristinati', 'Texts and columns reset'])); };
+
   /* ---------- global search ---------- */
   function searchAll(q) {
     q = q.trim().toUpperCase(); if (q.length < 2) return [];
@@ -1467,6 +1677,7 @@
     else if (s[0] === 'articolo') html = pageItem(s[1], r.q);
     else if (s[0] === 'dati') html = pageData();
     else if (s[0] === 'contabilita') html = pageAcc(r.q);
+    else if (s[0] === 'impostazioni') html = pageSettings();
     else html = pageHome();
     var active = document.activeElement, keepFilter = active && active.getAttribute && active.getAttribute('data-filter') === 'q' ? active.selectionStart : null;
     root.innerHTML = html;
@@ -1542,6 +1753,9 @@
     }
     if (el.getAttribute('data-act') === 'zero') { UI.showZero = el.checked; render(); return; }
     if (el.getAttribute('data-edit')) { editLine(el); return; }
+    if (el.getAttribute('data-set')) { setPath(el.getAttribute('data-set'), el.value); toast(L2(['Modello salvato', 'Template saved'])); return; }
+    if (el.getAttribute('data-setcol')) { var pc = el.getAttribute('data-setcol').split('|'), cc = JSON.parse(JSON.stringify(tpl()[pc[0]].cols)); if (el.checked) cc[pc[1]] = 1; else delete cc[pc[1]]; DB.settings = DB.settings || {}; DB.settings[pc[0]] = DB.settings[pc[0]] || {}; DB.settings[pc[0]].cols = cc; save(); return; }
+    if (el.getAttribute('data-act') === 'logo') { var lf = el.files && el.files[0]; if (!lf) return; if (lf.size > 300 * 1024) { toast(L2(['Logo troppo grande (max 300 KB)', 'Logo too large (max 300 KB)'])); return; } var lr = new FileReader(); lr.onload = function () { setPath('logo', lr.result); render(); }; lr.readAsDataURL(lf); return; }
     if (el.getAttribute('data-hedit')) { var dh = curDoc(); if (dh && UI.edit && UI.edit.id === dh.id) { var hf = el.getAttribute('data-hedit'); dh[hf] = el.value; UI.edit.dirty = true; } return; }
     if (el.id === 'seatsel') { P.seat = el.value; savePrefs(); render(); toast(L2(['Postazione: ', 'Station: ']) + seatName()); return; }
     if (el.getAttribute('data-act') === 'minstock') { var k2 = el.getAttribute('data-k'); DB.stock = DB.stock || {}; DB.stock[k2] = Math.max(0, parseNum(el.value)); save(); render(); toast(t('minSaved')); return; }
@@ -1575,5 +1789,6 @@
   });
 
   ensureDemo();
+  if (!DB.settings && window.SEED.settings) { DB.settings = clone(window.SEED.settings); save(); }
   render();
 })();
