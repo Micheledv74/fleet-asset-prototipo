@@ -36,7 +36,7 @@
     toChase: ['Ordini da sollecitare', 'Orders to chase'], all: ['tutti', 'all'], shipNotRecv: ['Spedizioni non confermate a bordo', 'Shipments not confirmed on board'],
     shipNotRecvTxt: ['Finché la nave non conferma la DN firmata, il magazzino di bordo non si aggiorna e la fattura non si può registrare.', 'Until the vessel confirms the signed DN, onboard stock is not updated and the invoice cannot be booked.'],
     rfqLate: ['RFQ oltre la data limite', 'RFQs past quotation limit'],
-    RQ: ['Richieste', 'Requisitions'], RFQ: ['RFQ', 'RFQs'], PO: ['Ordini', 'Orders'], DN: ['Consegne', 'Deliveries'], FT: ['Fatture', 'Invoices'],
+    RQ: ['Richieste', 'Requisitions'], RFQ: ['RFQ', 'RFQs'], PO: ['Ordini', 'Orders'], DN: ['Consegne', 'Deliveries'], FT: ['Fatture', 'Invoices'], FT1: ['Fattura fornitore', 'Supplier invoice'], sc_ft: ['Pagamento fattura', 'Invoice payment'],
     RQ1: ['Richiesta nave', 'Ship requisition'], RFQ1: ['Richiesta di offerta', 'Request for quotation'], PO1: ['Ordine', 'Purchase order'], DN1: ['Consegna (DN)', 'Delivery note'],
     allShips: ['Tutte le navi', 'All vessels'], allStatus: ['Tutti gli stati', 'All statuses'], onlyLate: ['Solo in ritardo', 'Late only'],
     filterTxt: ['Filtra in questo elenco', 'Filter this list'], columns: ['Colonne', 'Columns'], rows: ['righe', 'rows'],
@@ -73,7 +73,7 @@
     toShipSeat: ['Passa alla postazione Bordo', 'Switch to Vessel station'], onlyShipAct: ['Azione di bordo', 'Vessel action'],
     l_row: ['Riga', 'Row'], l_code: ['Codice', 'Code'], l_uom: ['UM', 'UOM'], l_qty: ['Q.tà', 'Qty'], l_price: ['Prezzo', 'Price'], l_disc: ['Sconto', 'Disc.'],
     l_net: ['Importo', 'Amount'], l_due: ['Consegna', 'Delivery'], l_recv: ['Ricevuto', 'Received'], l_res: ['Residuo', 'Open'], l_ship: ['Spedito', 'Shipped'],
-    goods: ['Merce', 'Goods'], ch_transport: ['Trasporto', 'Transport'], ch_packing: ['Imballo', 'Packing'], ch_other: ['Altre spese', 'Other charges'], grand: ['Totale documento', 'Document total'],
+    goods: ['Merce', 'Goods'], ch_transport: ['Trasporto', 'Transport'], ch_packing: ['Imballo', 'Packing'], ch_other: ['Altre spese', 'Other charges'], ch_hub: ['Hub / handling', 'Hub / handling'], ch_customs: ['Dogana', 'Customs'], ch_bank: ['Spese bancarie', 'Bank charges'], grand: ['Totale documento', 'Document total'],
     rcvTitle: ['Ricevuta a bordo', 'Received on board'], rcvTxt: ['Indica le quantità effettivamente ricevute. Le differenze restano aperte sull\'ordine.', 'Enter the quantities actually received. Differences stay open on the order.'],
     signed: ['DN timbrata e firmata dal Comandante / Direttore di macchina', 'DN stamped and signed by Master / Chief Engineer'], signedFile: ['Scansione o foto della DN firmata', 'Scan or photo of the signed DN'],
     signedReq: ['Senza DN firmata la consegna non si chiude.', 'Without the signed DN the delivery cannot be closed.'],
@@ -97,18 +97,19 @@
     RQ: { bozza: ['Bozza', 'Draft'], endorsed: ['Endorsed', 'Endorsed'], verifica: ['Verifica ufficio', 'Office review'], quotazione: ['In quotazione', 'Price sourcing'], quotata: ['Quotata', 'Priced'], ordinata: ['Ordinata', 'Ordered'], chiusa: ['Chiusa', 'Closed'], annullata: ['Annullata', 'Cancelled'] },
     RFQ: { creata: ['Creata', 'Created'], inviata: ['Inviata', 'Sent to vendor'], quotata: ['Offerta ricevuta', 'Offer received'], rifiutata: ['Rifiutata', 'Refused'], annullata: ['Annullata', 'Cancelled'] },
     PO: { bozza: ['Bozza', 'Draft'], approvato: ['Approvato', 'Approved'], inviato: ['Inviato', 'Published'], confermato: ['Confermato', 'Confirmed'], finalizzato: ['Finalizzato', 'Finalized'], annullato: ['Annullato', 'Cancelled'] },
-    DN: { pronta: ['Pronta per spedizione', 'Ready for shipment'], spedita: ['Spedita alla nave', 'Shipped to vessel'], ricevuta: ['Ricevuta a bordo', 'Received on board'] },
-    CS: { registrato: ['Registrato', 'Recorded'] }, INV: { registrato: ['Registrato', 'Recorded'] }
+    DN: { pronta: ['Pronta per spedizione', 'Ready for shipment'], hub: ['In hub spedizioniere', 'At forwarder hub'], spedita: ['Spedita alla nave', 'Shipped to vessel'], ricevuta: ['Ricevuta a bordo', 'Received on board'] },
+    CS: { registrato: ['Registrato', 'Recorded'] }, INV: { registrato: ['Registrato', 'Recorded'] },
+    FT: { registrata: ['Registrata', 'Booked'], pagata: ['Pagata', 'Paid'] }
   };
-  var TONE = { bozza: 'neutral', creata: 'neutral', endorsed: 'warn', verifica: 'info', quotazione: 'info', inviata: 'info', inviato: 'info', quotata: 'acc', approvato: 'acc', confermato: 'info', ordinata: 'ok', finalizzato: 'ok', pronta: 'warn', spedita: 'info', ricevuta: 'ok', chiusa: 'neutral', annullata: 'bad', annullato: 'bad', rifiutata: 'bad', registrato: 'ok' };
+  var TONE = { bozza: 'neutral', creata: 'neutral', endorsed: 'warn', verifica: 'info', quotazione: 'info', inviata: 'info', inviato: 'info', quotata: 'acc', approvato: 'acc', confermato: 'info', ordinata: 'ok', finalizzato: 'ok', pronta: 'warn', spedita: 'info', ricevuta: 'ok', chiusa: 'neutral', annullata: 'bad', annullato: 'bad', rifiutata: 'bad', registrato: 'ok', hub: 'warn', registrata: 'warn', pagata: 'ok' };
   var FLOW = {
     RQ: ['bozza', 'endorsed', 'verifica', 'quotazione', 'quotata', 'ordinata', 'chiusa'],
     RFQ: ['creata', 'inviata', 'quotata'],
     PO: ['bozza', 'approvato', 'inviato', 'confermato', 'finalizzato'],
-    DN: ['pronta', 'spedita', 'ricevuta'],
-    CS: ['registrato'], INV: ['registrato']
+    DN: ['pronta', 'hub', 'spedita', 'ricevuta'],
+    CS: ['registrato'], INV: ['registrato'], FT: ['registrata', 'pagata']
   };
-  var OPTIONAL = { PO: { confermato: 1 } };
+  var OPTIONAL = { PO: { confermato: 1 }, DN: { hub: 1 } };
   var NEG = { annullata: 1, annullato: 1, rifiutata: 1 };
   var ACT = {
     RQ: {
@@ -139,7 +140,8 @@
     RQ: { bozza: 1, endorsed: 1, verifica: 1, quotazione: 1, quotata: 1 },
     RFQ: { creata: 1, inviata: 1 },
     PO: { bozza: 1, approvato: 1, inviato: 1, confermato: 1 },
-    DN: { pronta: 1, spedita: 1 }
+    DN: { pronta: 1, hub: 1, spedita: 1 },
+    FT: { registrata: 1 }
   };
   function stLabel(d) { var x = ST[d.type][d.status]; return x ? x[P.lang === 'en' ? 1 : 0] : d.status; }
   function chip(d) { return '<span class="chip c-' + (TONE[d.status] || 'neutral') + '">' + esc(stLabel(d)) + '</span>'; }
@@ -210,6 +212,18 @@
       var v = B[p], cur = p;
       while (cur) { var o = out[cur]; if (o) { o.b += v.b; o.o += v.o; o.d += v.d; } cur = A[cur] ? A[cur].parent : null; }
     });
+    function add(path, o, dl) { var cur = path; while (cur) { var x = out[cur]; if (x) { x.o += o; x.d += dl; } cur = A[cur] ? A[cur].parent : null; } }
+    DB.docs.forEach(function (d) {
+      if (!d.proto || d.ship !== ship) return;
+      if (d.type === 'PO' && d.account && d.lines && { approvato: 1, inviato: 1, confermato: 1, finalizzato: 1 }[d.status]) {
+        var rec = poReceived(d), o = 0, dl = 0;
+        d.lines.forEach(function (l) { var u = unitEur(d, l), r = Math.min(rec[l.row] || 0, l.qty); o += (l.qty - r) * u; dl += r * u; });
+        var anyRec = Object.keys(rec).some(function (k) { return rec[k] > 0; });
+        (d.charges || []).forEach(function (c) { if (anyRec) dl += toEur(c.amount, d.cur); else o += toEur(c.amount, d.cur); });
+        add(d.account, o, dl);
+      }
+      if (d.type === 'FT') (d.charges || []).forEach(function (c) { if (c.account && c.amount) add(c.account, 0, toEur(c.amount, d.cur)); });
+    });
     return out;
   }
   function yearFrac() { var y = TODAY.slice(0, 4); return Math.min(1, (daysBetween(y + '-01-01', TODAY) + 1) / 365); }
@@ -272,7 +286,13 @@
     }).join('');
     var dnBy = DB.ships.map(function (s) { var n = docs(function (d) { return d.ship === s.code && d.type === 'DN' && d.status === 'spedita'; }).length; return n ? s.code + ' ' + n : null; }).filter(Boolean).join(' · ');
     var dnTot = docs(function (d) { return d.type === 'DN' && d.status === 'spedita'; }).length;
+    var demo = byId('DEMO-RQ'), demoChain = docs(function (d) { return d.demo; });
+    var demoLast = demoChain.slice().sort(function (a, b) { return FLOWORDER[b.type] - FLOWORDER[a.type]; })[0];
     var side = '<aside class="side">' +
+      '<section class="card stack" style="border-color:var(--accLine)"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2>' + esc(L2(['Pratica demo', 'Demo case'])) + '</h2><span class="chip c-acc">DEMO</span></div>' +
+      '<div style="font-size:13px">' + esc(demo ? demo.num + ' · ' + demo.desc : '—') + '</div>' +
+      (demoLast ? '<div class="mute" style="font-size:12px">' + esc(L2(['A che punto è: ', 'Current step: '])) + esc(t(demoLast.type + '1')) + ' ' + esc(demoLast.num) + ' · ' + esc(stLabel(demoLast)) + '</div>' : '') +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn pri" href="#/doc/' + (demoLast ? demoLast.id : 'DEMO-RQ') + '">' + esc(L2(['Riprendi', 'Resume'])) + '</a><button class="btn" data-act="demoreset">' + esc(L2(['Ricomincia da capo', 'Start over'])) + '</button></div></section>' +
       '<section class="card stack"><div style="display:flex;justify-content:space-between;align-items:baseline"><h2>' + esc(t('toChase')) + '</h2><a href="#/docs' + qs({ tipo: 'PO', late: 1 }) + '" style="font-size:12px">' + esc(t('all')) + ' (' + late.length + ')</a></div>' + lateHtml + '</section>' +
       '<section class="next"><div class="t">' + esc(t('shipNotRecv')) + '</div><div class="j" style="font-size:22px;font-weight:600">' + dnTot + '</div><div class="mute" style="font-size:12px">' + esc(dnBy) + '</div><div style="font-size:13px;line-height:1.5">' + esc(t('shipNotRecvTxt')) + '</div><a href="#/docs' + qs({ tipo: 'DN', stato: 'spedita' }) + '" style="font-weight:700;font-size:13px">' + esc(t('all')) + ' →</a></section>' +
       '</aside>';
@@ -359,7 +379,8 @@
     RQ: { all: ['num', 'orig', 'ship', 'desc', 'status', 'dept', 'side', 'date', 'due', 'quote'], def: ['num', 'ship', 'desc', 'status', 'dept', 'date', 'due', 'quote'] },
     RFQ: { all: ['num', 'orig', 'ship', 'desc', 'status', 'sup', 'total', 'eur', 'usd', 'dept', 'date', 'limit', 'due', 'from'], def: ['num', 'ship', 'desc', 'sup', 'status', 'total', 'eur', 'limit'] },
     PO: { all: ['num', 'orig', 'ship', 'desc', 'status', 'sup', 'total', 'eur', 'usd', 'dept', 'date', 'due', 'from'], def: ['num', 'ship', 'desc', 'sup', 'status', 'total', 'eur', 'date', 'due'] },
-    DN: { all: ['num', 'orig', 'ship', 'desc', 'status', 'sup', 'deliverTo', 'side', 'dept', 'date', 'due', 'from'], def: ['num', 'ship', 'desc', 'sup', 'status', 'side', 'date', 'due', 'from'] }
+    DN: { all: ['num', 'orig', 'ship', 'desc', 'status', 'sup', 'deliverTo', 'side', 'dept', 'date', 'due', 'from'], def: ['num', 'ship', 'desc', 'sup', 'status', 'side', 'date', 'due', 'from'] },
+    FT: { all: ['num', 'ship', 'desc', 'status', 'sup', 'total', 'eur', 'usd', 'date', 'due', 'from'], def: ['num', 'ship', 'desc', 'sup', 'status', 'total', 'eur', 'date', 'due', 'from'] }
   };
   function gridTable(rows, cols, sortKey, sortDir) {
     if (!rows.length) return '<div class="empty">' + esc(t('noResults')) + '</div>';
@@ -380,10 +401,10 @@
   function pageDocs(q) {
     var tipo = q.tipo || 'RQ', nave = q.nave || '';
     var base = docs(function (d) { return !nave || d.ship === nave; });
-    var tabs = ['RQ', 'RFQ', 'PO', 'DN'].map(function (ty) {
+    var tabs = ['RQ', 'RFQ', 'PO', 'DN', 'FT'].map(function (ty) {
       var n = base.filter(function (d) { return d.type === ty; }).length;
       return '<a class="' + (ty === tipo ? 'on' : '') + '" href="#/docs' + qs({ tipo: ty, nave: nave }) + '">' + esc(t(ty)) + '<span class="j">' + n + '</span></a>';
-    }).join('') + '<a href="#/modulo/fatture" class="">' + esc(t('FT')) + '<span class="j">—</span></a>';
+    }).join('');
     var rows = base.filter(function (d) {
       return d.type === tipo && (!q.stato || d.status === q.stato) && (!q.aperti || isOpen(d)) && (!q.late || isLate(d)) && matchQ(d, q.q);
     });
@@ -405,6 +426,7 @@
       '<label class="tog"><input type="checkbox" data-filter="aperti"' + (q.aperti ? ' checked' : '') + '> ' + esc(P.lang === 'en' ? 'Open only' : 'Solo aperti') + '</label>' +
       '<label class="tog"><input type="checkbox" data-filter="late"' + (q.late ? ' checked' : '') + '> ' + esc(t('onlyLate')) + '</label>' +
       '<span style="flex:1"></span><span class="mute j" style="font-size:12px">' + rows.length + ' ' + esc(t('rows')) + '</span>' +
+      (tipo === 'RQ' ? '<button class="btn pri sm" data-act="newrq" data-ship="' + nave + '">' + esc(L2(['Nuova richiesta', 'New requisition'])) + '</button>' : '') +
       '<div class="colmenu"><button class="btn sm" data-act="colmenu" aria-expanded="' + UI.colOpen + '">' + esc(t('columns')) + '</button>' + menu + '</div></div>';
     var title = t(tipo) + (nave ? ' · ' + nave : '');
     return shell('docs', crumb([[t('fleet'), '#/'], nave ? [shipBy(nave).name, '#/nave/' + nave] : [t('allShips')], [t('purchasing')]]), title,
@@ -432,13 +454,15 @@
       '<dt>' + esc(t('c_ship')) + '</dt><dd><a href="#/nave/' + d.ship + '">' + esc(shipBy(d.ship).name) + '</a></dd>' +
       (d.sup ? '<dt>' + esc(t('c_sup')) + '</dt><dd><a href="#/fornitore/' + encodeURIComponent(d.sup) + '">' + esc(supName(d.sup)) + '</a> <span class="j mute">' + esc(d.sup) + '</span></dd>' : '') + tot +
       '<dt>' + esc(t('c_date')) + '</dt><dd class="j">' + fd(d.date) + '</dd>' +
-      '<dt>' + esc(d.type === 'RQ' ? t('c_due') : d.type === 'DN' ? t('sc_dn') : t('c_due')) + '</dt><dd class="j' + (isLate(d) && d.type !== 'RFQ' ? ' t-bad' : '') + '">' + fd(d.due) + '</dd>' +
+      '<dt>' + esc(d.type === 'FT' ? L2(['Scadenza pagamento', 'Payment due']) : d.type === 'DN' ? t('sc_dn') : t('c_due')) + '</dt><dd class="j' + (isLate(d) && d.type !== 'RFQ' ? ' t-bad' : '') + '">' + fd(d.due) + '</dd>' +
       (d.limit ? '<dt>' + esc(t('c_limit')) + '</dt><dd class="j' + (isLate(d) ? ' t-bad' : '') + '">' + fd(d.limit) + '</dd>' : '') +
       (d.deliverTo ? '<dt>' + esc(t('c_deliverTo')) + '</dt><dd>' + esc(d.deliverTo) + '</dd>' : '') +
       (d.terms ? '<dt>' + esc(t('terms')) + '</dt><dd>' + esc(d.terms) + '</dd>' : '') +
       (d.offer ? '<dt>' + esc(t('extRef')) + '</dt><dd>' + esc(d.offer.ref || '—') + ' · ' + esc(t('validDays')) + ' ' + d.offer.days + '</dd>' : '') +
-      '<dt>' + esc(t('c_orig')) + '</dt><dd class="j">' + esc(d.orig || '—') + '</dd></dl></section>';
-    var lines = d.lines ? linesTable(d) : '<section class="card stack"><h2>' + esc(t('lines')) + '</h2><div class="note">' + esc(t('noLines')) + '</div></section>';
+      (d.type === 'PO' && d.account ? '<dt>' + esc(L2(['Conto di budget', 'Budget account'])) + '</dt><dd class="j">' + esc(d.account) + '</dd>' : '') +
+      (d.type === 'DN' && d.route ? '<dt>' + esc(L2(['Percorso', 'Route'])) + '</dt><dd>' + esc(d.route === 'hub' ? L2(['Via hub', 'Via hub']) + ' · ' + d.hub : L2(['Diretta a bordo', 'Direct on board'])) + (d.port ? ' → ' + esc(d.port) : '') + '</dd>' : '') +
+      '<dt>' + esc(d.type === 'FT' ? L2(['N. fattura fornitore', 'Supplier invoice no.']) : t('c_orig')) + '</dt><dd class="j">' + esc(d.orig || '—') + '</dd></dl></section>';
+    var lines = editable(d) ? rqEditor(d) + comparison(d) : d.lines ? linesTable(d) + (d.type === 'RQ' ? comparison(d) : '') : '<section class="card stack"><h2>' + esc(t('lines')) + '</h2><div class="note">' + esc(t('noLines')) + '</div></section>';
 
     // chain
     var rt = chainRoot(d), chainRows = [];
@@ -452,7 +476,7 @@
     }).join('') : '<div class="mute" style="font-size:13px">' + esc(t('noChain')) + '</div>';
 
     // next actions
-    var acts = (ACT[d.type] && ACT[d.type][d.status]) || [];
+    var acts = actionsFor(d);
     var nextHtml;
     if (!acts.length) nextHtml = '<section class="card"><div class="mute">' + esc(t('closed')) + '</div></section>';
     else {
@@ -471,6 +495,7 @@
 
     var head = '<div class="stack" style="gap:8px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="j mute">' + esc(d.num) + '</span>' + chip(d) +
       (isLate(d) ? '<span class="chip c-bad">' + esc(t('late')) + '</span>' : '') +
+      (d.prio && d.prio !== 'normale' ? '<span class="chip c-bad">' + esc(L2(PRIO[d.prio])) + '</span>' : '') + (d.demo ? '<span class="chip c-acc">DEMO</span>' : '') +
       '<span class="chip c-neutral">' + esc(t('c_side')) + ': ' + esc(t(d.side)) + '</span>' + (d.dept ? '<span class="chip c-neutral">' + esc(t(d.dept)) + '</span>' : '') + '</div>' +
       '<h1 class="h1">' + esc(d.desc || '—') + '</h1></div>';
     var body = '<div class="row">' + pathHtml +
@@ -481,13 +506,13 @@
   }
   var FLOWORDER = { RQ: 0, RFQ: 1, PO: 2, DN: 3, FT: 4 };
 
-  function advance(d, to, extra) {
+  function advance(d, to, extra) { setStatus(d, to, extra); save(); render(); toast(t('done') + ': ' + ST[d.type][to][P.lang === 'en' ? 1 : 0]); }
+  function setStatus(d, to, extra) {
     var from = d.status; d.status = to;
     d.log = d.log || [];
     if (!d.log.length) d.log.push({ at: d.date, to: from, txt: (P.lang === 'en' ? 'Imported from InfoSHIP · ' : 'Importato da InfoSHIP · ') + ST[d.type][from][P.lang === 'en' ? 1 : 0] });
     d.log.push({ at: TODAY, to: to, txt: ST[d.type][to][P.lang === 'en' ? 1 : 0] + (extra ? ' · ' + extra : '') });
     if (d.type === 'DN' && to === 'ricevuta') d.side = 'office';
-    save(); render(); toast(t('done') + ': ' + ST[d.type][to][P.lang === 'en' ? 1 : 0]);
   }
 
   /* ---------- modal ---------- */
@@ -588,7 +613,7 @@
   function pageDue(q) {
     var nave = q.nave || '';
     var items = docs(function (d) { return (!nave || d.ship === nave) && isOpen(d) && lateDate(d) && !(d.type === 'RQ' && d.status === 'quotata'); }).map(function (d) {
-      return { d: d, at: lateDate(d), k: d.type === 'RFQ' ? 'sc_rfq' : d.type === 'PO' ? 'sc_po' : d.type === 'DN' ? 'sc_dn' : 'sc_rq' };
+      return { d: d, at: lateDate(d), k: d.type === 'RFQ' ? 'sc_rfq' : d.type === 'PO' ? 'sc_po' : d.type === 'DN' ? 'sc_dn' : d.type === 'FT' ? 'sc_ft' : 'sc_rq' };
     }).sort(function (a, b) { return a.at < b.at ? -1 : 1; });
     var in14 = new Date(Date.parse(TODAY) + 14 * 864e5).toISOString().slice(0, 10);
     var groups = [['sc_over', items.filter(function (i) { return i.at < TODAY; })], ['sc_next', items.filter(function (i) { return i.at >= TODAY && i.at <= in14; })], ['sc_later', items.filter(function (i) { return i.at > in14; })]];
@@ -621,7 +646,8 @@
   function disc(l) { return (1 - (l.d1 || 0) / 100) * (1 - (l.d2 || 0) / 100); }
   function unitEur(po, l) { var u = l.price * disc(l); return po.cur === 'USD' ? u / (po.fx || fx()) : u; }
   function itemById(id) { var a = DB.items || []; for (var i = 0; i < a.length; i++) if (a[i].id === id) return a[i]; return null; }
-  function lineDesc(l) { return '<div>' + esc(l.desc) + '</div>' + (l.note ? '<div class="mute" style="font-size:12px">' + esc(l.note) + '</div>' : '') + (l.impa ? '<div class="mute j" style="font-size:11px">IMPA ' + esc(l.impa) + '</div>' : ''); }
+  function lineDesc(l) { return '<div>' + esc(l.desc) + '</div>' + (l.note ? '<div class="mute" style="font-size:12px">' + esc(l.note) + '</div>' : '') + (l.impa ? '<div class="mute j" style="font-size:11px">IMPA ' + esc(l.impa) + '</div>' : '') +
+    (l.cond ? '<div style="font-size:12px;margin-top:2px">' + condChip(l.cond) + ' <span class="mute">' + esc(l.origin || '') + (l.days != null ? ' · ' + l.days + ' gg' : '') + '</span></div>' : '') + (l.quoted === false ? '<div class="chip c-neutral" style="margin-top:2px">' + esc(L2(['Non quotato', 'Not quoted'])) + '</div>' : '') + (l.asset ? '<div class="mute" style="font-size:11px">Asset: ' + esc(l.asset) + '</div>' : ''); }
   function poReceived(po) {
     var m = {};
     docs(function (x) { return x.type === 'DN' && x.from && x.from[0] === po.id && x.lines; }).forEach(function (dn) {
@@ -650,10 +676,11 @@
           (rec ? '<td class="num j t-ok">' + (r ? nf(r) : '—') + '</td><td class="num j ' + (res > 0 ? 't-bad' : 'mute') + '">' + (res > 0 ? nf(res) : '0') + '</td>' : '') +
           '<td class="j">' + fd(l.due) + '</td></tr>';
       });
-      if (d.type === 'PO') {
-        var goods = d.lines.reduce(function (a, l) { return a + (l.net || 0); }, 0);
-        var ch = (d.charges || []).map(function (c) { return '<dt>' + esc(t('ch_' + c.kind)) + (c.note ? ' <span class="mute">(' + esc(c.note) + ')</span>' : '') + '</dt><dd class="j" style="text-align:right">' + money(c.amount, d.cur) + '</dd>'; }).join('');
-        foot = '<dl class="kv" style="max-width:420px;margin-left:auto"><dt>' + esc(t('goods')) + '</dt><dd class="j" style="text-align:right">' + money(goods, d.cur) + '</dd>' + ch +
+      if (d.type === 'PO' || ((d.type === 'RFQ' || d.type === 'FT') && d.total)) {
+        var goods = d.type === 'FT' ? d.goods : d.lines.reduce(function (a, l) { return a + (l.quoted === false ? 0 : (l.net || 0)); }, 0);
+        var ch = (d.charges || []).filter(function (c) { return c.amount; }).map(function (c) { return '<dt>' + esc(t('ch_' + c.kind)) + (c.note ? ' <span class="mute">(' + esc(c.note) + ')</span>' : '') + (c.account ? ' <span class="j mute">' + esc(c.account) + '</span>' : '') + '</dt><dd class="j" style="text-align:right">' + money(c.amount, d.cur) + '</dd>'; }).join('');
+        foot = (d.type === 'FT' && Math.abs(d.goods - d.poGoods) > 0.005 ? '<div class="note" style="color:var(--red)">' + esc(L2(['Merce fatturata diversa dal valore ricevuto da ordine: ', 'Invoiced goods differ from received order value: '])) + money(d.poGoods, d.cur) + ' → ' + money(d.goods, d.cur) + '</div>' : '') +
+          '<dl class="kv" style="max-width:460px;margin-left:auto"><dt>' + esc(t('goods')) + '</dt><dd class="j" style="text-align:right">' + money(goods, d.cur) + '</dd>' + ch +
           '<dt><b>' + esc(t('grand')) + '</b></dt><dd class="j" style="text-align:right"><b>' + money(d.total, d.cur) + '</b><br><span class="mute">≈ ' + (d.cur === 'USD' ? money(toEur(d.total, 'USD'), 'EUR') : money(toUsd(d.total, 'EUR'), 'USD')) + '</span></dd></dl>' +
           (d.mdsdoc ? '<div class="note">SOLAS II-1/3-5 · MD/SDoC ' + esc(P.lang === 'en' ? 'required for all items' : 'richiesti per tutti gli articoli') + '</div>' : '');
       }
@@ -683,6 +710,7 @@
       DB.moves = DB.moves || [];
       (dn.lines || []).forEach(function (l, i) {
         var q = Math.max(0, parseNum(form.elements['q' + i].value)); l.recv = q;
+        if (!l.item && q > 0) l.item = ensureItem(l, po);
         if (q > 0 && l.item) {
           var pl = po && po.lines ? po.lines.filter(function (x) { return x.row === l.src; })[0] : null;
           DB.moves.push({ id: 'M-' + dn.id + '-' + l.row + '-' + Date.now(), ship: dn.ship, item: l.item, date: TODAY, qty: q, kind: 'carico', doc: dn.id, row: l.row, cost: pl ? Math.round(unitEur(po, pl) * 10000) / 10000 : 0 });
@@ -693,6 +721,14 @@
       close();
       advance(dn, 'ricevuta', (dn.lines || []).length ? (dn.lines.length + ' ' + t('rows')) : '');
     });
+  }
+  function ensureItem(l, po) {
+    DB.items = DB.items || [];
+    var key = (l.impa || '').trim(), it = null;
+    DB.items.forEach(function (x) { if (key ? x.impa === key : (!x.impa && x.desc.toUpperCase() === (l.desc + (l.note ? ' · ' + l.note : '')).toUpperCase())) it = x; });
+    if (!it) { it = { id: 'N-' + Date.now() + '-' + Math.floor(Math.random() * 1e4), code: key || 'NEW', impa: key || null, desc: l.desc + (!key && l.note ? ' · ' + l.note : ''), uom: l.uom, generic: !key }; DB.items.push(it); }
+    if (po && po.lines) po.lines.forEach(function (pl) { if (pl.row === l.src && !pl.item) pl.item = it.id; });
+    return it.id;
   }
   function stockOf(ship) {
     var m = {};
@@ -818,6 +854,455 @@
     DB.docs.push(d); save(); location.hash = '#/doc/' + d.id;
   }
 
+
+  /* ---------- purchasing flow: requisition → RFQ → offer → award → PO → DN → invoice ---------- */
+  var PRIO = { normale: ['Normale', 'Normal'], urgente: ['Urgente', 'Urgent'], critica: ['Critica', 'Critical'] };
+  var CONDS = ['Genuine', 'Non genuine', 'Usato'];
+  function L2(a) { return a[P.lang === 'en' ? 1 : 0]; }
+  function addDays(iso, n) { var d = new Date(Date.parse(iso) + n * 864e5); return d.toISOString().slice(0, 10); }
+  function condChip(c) { return '<span class="chip ' + (c === 'Genuine' ? 'c-ok' : c === 'Usato' ? 'c-violet' : 'c-warn') + '" style="font-size:11px;padding:1px 7px">' + esc(c === 'Usato' ? L2(['Usato / ricond.', 'Used / recond.']) : c) + '</span>'; }
+  function cloneLine(l, extra) { var o = {}; for (var k in l) o[k] = l[k]; for (var e in extra) o[e] = extra[e]; return o; }
+  function newDoc(type, ship, base, note) {
+    var d = { id: type + '-' + Date.now() + '-' + Math.floor(Math.random() * 1e4), type: type, num: nextNum(ship, type), ship: ship, date: TODAY, side: 'office', proto: true, from: [], log: [] };
+    for (var k in base) d[k] = base[k];
+    d.log.push({ at: TODAY, to: d.status, txt: L2(ST[type][d.status]) + (note ? ' · ' + note : '') });
+    DB.docs.push(d); return d;
+  }
+  function editable(d) { return d.type === 'RQ' && !!d.lines && (d.status === 'bozza' || d.status === 'endorsed' || d.status === 'verifica'); }
+  function docGoods(d) { return (d.lines || []).reduce(function (a, l) { return a + (l.quoted === false ? 0 : (l.net || 0)); }, 0); }
+  function docTotal(d) { return Math.round((docGoods(d) + (d.charges || []).reduce(function (a, c) { return a + (c.amount || 0); }, 0)) * 100) / 100; }
+  function postable(ship) {
+    var B = DB.budgets[ship] || {};
+    return DB.accounts.filter(function (a) { return a.post && (a.path.indexOf('00-') === 0 || a.path.indexOf('20-') === 0) && a.path.indexOf('00-10-') !== 0 && a.path.indexOf('00-11-') !== 0 && a.path.indexOf('00-12-') !== 0 && a.path.indexOf('00-8-') !== 0 && a.path.indexOf('00-9-') !== 0; })
+      .sort(function (a, b) { return ((B[b.path] || {}).b || 0) - ((B[a.path] || {}).b || 0) || (a.path < b.path ? -1 : 1); });
+  }
+  function acctOptions(ship, sel) {
+    return postable(ship).map(function (a) { return '<option value="' + esc(a.path) + '"' + (a.path === sel ? ' selected' : '') + '>' + esc(a.path + ' · ' + a.desc) + '</option>'; }).join('');
+  }
+
+  /* generic modal with custom HTML */
+  function formModal(title, inner, onSubmit, opts) {
+    opts = opts || {};
+    var bg = document.createElement('div'); bg.className = 'modal-bg';
+    bg.innerHTML = '<form class="modal" style="width:min(' + (opts.w || 560) + 'px,100%);max-height:92vh;overflow:auto" role="dialog" aria-modal="true" aria-label="' + esc(title) + '"><h3>' + esc(title) + '</h3>' + inner +
+      '<div class="acts">' + (opts.extra || '') + '<span style="flex:1"></span><button type="button" class="btn" data-x="1">' + esc(t('close')) + '</button><button class="btn pri" type="submit">' + esc(opts.ok || t('confirm')) + '</button></div></form>';
+    document.body.appendChild(bg);
+    var form = bg.querySelector('form');
+    function close() { bg.remove(); }
+    bg.addEventListener('click', function (e) { if (e.target === bg || e.target.getAttribute('data-x')) close(); if (opts.onClick) opts.onClick(e, form); });
+    bg.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+    bg.addEventListener('input', function (e) { if (opts.onInput) opts.onInput(e, form); });
+    form.addEventListener('submit', function (e) { e.preventDefault(); if (onSubmit(form) !== false) close(); });
+    var f = form.querySelector('input:not([type=checkbox]),textarea,select'); if (f) f.focus();
+    return form;
+  }
+
+  /* ---- actions available on each document ---- */
+  function actionsFor(d) {
+    var base = (ACT[d.type] && ACT[d.type][d.status]) || [], lines = d.lines && d.lines.length;
+    if (!lines) {
+      if (d.type === 'DN' && d.status === 'pronta') return [{ to: 'spedita', l: ['Spedita alla nave', 'Shipped to vessel'] }];
+      return base;
+    }
+    if (d.type === 'RQ') {
+      var rfqs = children(d.id).filter(function (x) { return x.type === 'RFQ'; });
+      if (d.status === 'verifica') return [{ to: 'quotazione', l: ['Richiedi quotazioni ai fornitori', 'Request quotations'], form: 'rfq' }];
+      if (d.status === 'quotazione' || d.status === 'quotata') {
+        var a = [];
+        if (d.award && Object.keys(d.award).length) a.push({ to: 'ordinata', l: ['Crea gli ordini dalla scelta', 'Create orders from selection'], form: 'orders' });
+        else a.push({ to: 'quotata', l: ['Scegli le offerte nella comparazione', 'Pick offers in the comparison'], form: 'scroll' });
+        a.push({ to: 'quotazione', l: ['Aggiungi un fornitore', 'Add a supplier'], form: 'rfq', sec: 1 });
+        return a;
+      }
+      if (d.status === 'ordinata') {
+        var open = docs(function (x) { return x.from && x.from[0] && byId(x.from[0]) && byId(x.from[0]).from && byId(x.from[0]).from[0] === d.id && x.type === 'PO'; });
+        return base;
+      }
+      return base;
+    }
+    if (d.type === 'RFQ') {
+      if (d.status === 'creata') return [{ to: 'inviata', l: ['Prepara email e invia', 'Prepare email and send'], form: 'mail' }];
+      if (d.status === 'inviata') return [{ to: 'quotata', l: ['Registra offerta', 'Record offer'], form: 'offer2' }, { to: 'rifiutata', l: ['Il fornitore non quota', 'Vendor declines'], sec: 1 }];
+      if (d.status === 'quotata') { var rq = d.from && byId(d.from[0]); return rq ? [{ to: 'quotata', l: ['Vai alla comparazione', 'Go to comparison'], form: 'gorq' }] : []; }
+    }
+    if (d.type === 'PO') {
+      if (d.status === 'bozza') return [{ to: 'approvato', l: ['Approva ordine', 'Approve order'], form: 'approve' }];
+      if (d.status === 'approvato') return [{ to: 'inviato', l: ['Prepara email e invia', 'Prepare email and send'], form: 'mail' }];
+      if (d.status === 'finalizzato') return poResidual(d).some(function (x) { return x > 0; }) ? [{ to: 'finalizzato', l: ['Merce pronta: crea consegna (DN)', 'Goods ready: create delivery note'], form: 'dn' }] : [];
+      return base;
+    }
+    if (d.type === 'DN') {
+      if (d.status === 'pronta') return d.route === 'hub' ? [{ to: 'hub', l: ['Arrivata in hub', 'Arrived at hub'] }, { to: 'spedita', l: ['Spedita direttamente a bordo', 'Shipped direct to vessel'], sec: 1 }] : [{ to: 'spedita', l: ['Spedita a bordo', 'Shipped to vessel'] }];
+      if (d.status === 'hub') return [{ to: 'spedita', l: ['Partita dall\'hub verso la nave', 'Left hub for the vessel'] }];
+      if (d.status === 'ricevuta') return children(d.id).some(function (x) { return x.type === 'FT'; }) ? [] : [{ to: 'ricevuta', l: ['Registra fattura fornitore', 'Book supplier invoice'], form: 'ft' }];
+      return base;
+    }
+    if (d.type === 'FT' && d.status === 'registrata') return [{ to: 'pagata', l: ['Segna come pagata', 'Mark as paid'] }];
+    return base;
+  }
+
+  /* ---- requisition editor ---- */
+  function rqEditor(d) {
+    var rows = d.lines.map(function (l, i) {
+      return '<tr><td class="j">' + l.row + '</td>' +
+        '<td><input class="j" data-edit="' + i + '|impa" value="' + esc(l.impa || '') + '" style="width:90px" aria-label="IMPA"></td>' +
+        '<td><input data-edit="' + i + '|desc" value="' + esc(l.desc) + '" style="width:100%" aria-label="' + esc(t('c_desc')) + '"><input data-edit="' + i + '|note" value="' + esc(l.note || '') + '" placeholder="P/N, maker, note" style="width:100%;margin-top:4px;font-size:12px" aria-label="note"></td>' +
+        '<td><input data-edit="' + i + '|asset" value="' + esc(l.asset || '') + '" style="width:150px" aria-label="Asset"></td>' +
+        '<td><input class="j" data-edit="' + i + '|qty" value="' + nf(l.qty) + '" inputmode="decimal" style="width:80px;text-align:right" aria-label="' + esc(t('l_qty')) + '"></td>' +
+        '<td><input data-edit="' + i + '|uom" value="' + esc(l.uom || 'PCE') + '" style="width:62px" aria-label="' + esc(t('l_uom')) + '"></td>' +
+        '<td><button type="button" class="btn sm ghost" data-act="delline" data-i="' + i + '" aria-label="' + esc(L2(['Elimina riga', 'Delete row'])) + ' ' + l.row + '">✕</button></td></tr>';
+    }).join('');
+    var opts = (DB.items || []).map(function (it) { return '<option value="' + esc((it.impa ? it.impa + ' · ' : '') + it.desc) + '"></option>'; }).join('');
+    return '<section class="card stack"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><h2>' + esc(t('lines')) + ' <span class="j mute">' + d.lines.length + '</span></h2><span class="mute" style="font-size:12px">' + esc(L2(['Modificabile fino alla richiesta di quotazione · salvataggio automatico', 'Editable until quotations are requested · saved automatically'])) + '</span></div>' +
+      '<div class="tablebox"><table class="grid edit"><thead><tr><th>' + esc(t('l_row')) + '</th><th>IMPA</th><th>' + esc(t('c_desc')) + '</th><th>Asset</th><th class="num">' + esc(t('l_qty')) + '</th><th>' + esc(t('l_uom')) + '</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<div class="filters"><input id="additem" list="itemlist" placeholder="' + esc(L2(['Aggiungi da anagrafica: IMPA o descrizione', 'Add from catalogue: IMPA or description'])) + '" style="flex:1;min-width:260px" aria-label="' + esc(L2(['Aggiungi articolo', 'Add item'])) + '"><datalist id="itemlist">' + opts + '</datalist>' +
+      '<button type="button" class="btn" data-act="addline">' + esc(L2(['Aggiungi riga', 'Add row'])) + '</button></div></section>';
+  }
+  function curDoc() { var r = route(); return r.seg[0] === 'doc' ? byId(r.seg[1]) : null; }
+  function editLine(el) {
+    var d = curDoc(); if (!d || !editable(d)) return;
+    var p = el.getAttribute('data-edit').split('|'), l = d.lines[+p[0]];
+    l[p[1]] = p[1] === 'qty' ? Math.max(0, parseNum(el.value)) : el.value.trim();
+    if (p[1] === 'impa') l.code = l.impa;
+    save();
+  }
+
+  /* ---- comparison & award ---- */
+  function rfqLine(rfq, row) { for (var i = 0; i < rfq.lines.length; i++) if (rfq.lines[i].src === row) return rfq.lines[i]; return null; }
+  function offerEur(rfq, l) { return unitEur(rfq, l) * (l.oqty || l.qty); }
+  function comparison(rq) {
+    var rfqs = children(rq.id).filter(function (x) { return x.type === 'RFQ' && x.lines; });
+    if (!rfqs.length) return '';
+    var award = rq.award || {}, quoted = rfqs.filter(function (r) { return r.status === 'quotata'; });
+    var best = {};
+    rq.lines.forEach(function (l) {
+      quoted.forEach(function (r) { var x = rfqLine(r, l.row); if (x && x.quoted) { var v = offerEur(r, x); if (best[l.row] == null || v < best[l.row]) best[l.row] = v; } });
+    });
+    var cols = rfqs.length;
+    var head = '<div style="padding:6px 4px;font-size:12px" class="mute">' + esc(t('l_row')) + '</div>' + rfqs.map(function (r) {
+      return '<div style="padding:6px 4px;display:flex;flex-direction:column;gap:2px"><a href="#/doc/' + r.id + '" style="font-weight:700;color:var(--ink);text-decoration:none">' + esc(supName(r.sup)) + '</a><span class="j mute" style="font-size:11px">' + esc(r.num) + ' · ' + esc(r.cur) + '</span>' + chip(r) + '</div>';
+    }).join('');
+    var body = rq.lines.map(function (l) {
+      return '<div style="border-top:1px solid var(--line);padding:10px 4px;display:flex;flex-direction:column;gap:2px"><div><span class="j mute" style="margin-right:6px">' + l.row + '</span><b>' + esc(l.desc) + '</b></div><div class="mute" style="font-size:12px">' + esc(l.note || '') + '</div><div class="j" style="font-size:12px">' + nf(l.qty) + ' ' + esc(l.uom) + '</div></div>' +
+        rfqs.map(function (r) {
+          var x = rfqLine(r, l.row);
+          if (r.status !== 'quotata' || !x) return '<div class="cmp-cell off" style="margin-top:8px"><span class="mute" style="font-size:12px">' + esc(r.status === 'rifiutata' ? L2(['Non quota', 'Declined']) : L2(['In attesa di offerta', 'Awaiting offer'])) + '</span></div>';
+          if (!x.quoted) return '<div class="cmp-cell off" style="margin-top:8px"><span class="mute" style="font-size:12px">' + esc(L2(['Non quotato', 'Not quoted'])) + '</span></div>';
+          var v = offerEur(r, x), on = award[l.row] === r.id;
+          return '<button type="button" class="cmp-cell' + (on ? ' on' : '') + '" data-act="award" data-row="' + l.row + '" data-rfq="' + r.id + '" aria-pressed="' + on + '" style="margin-top:8px">' +
+            '<span style="display:flex;justify-content:space-between;gap:6px"><span class="j" style="font-weight:600">' + money(x.net, r.cur) + '</span><span style="font-size:11px;font-weight:800;color:var(--accText)">' + (on ? esc(L2(['SCELTA', 'SELECTED'])) : '') + '</span></span>' +
+            '<span class="j mute" style="font-size:11px">' + nf(x.price) + (x.d1 ? ' −' + nf(x.d1, 0) + '%' : '') + ' /' + esc(l.uom) + ' · ≈ ' + (r.cur === 'USD' ? money(v, 'EUR') : money(v * fx(), 'USD')) + '</span>' +
+            '<span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">' + condChip(x.cond) + '<span class="j" style="font-size:11px">' + (x.days != null ? x.days + ' gg' : '') + '</span>' + (Math.abs(v - best[l.row]) < 0.005 ? '<span style="font-size:11px;font-weight:700;color:var(--teal)">' + esc(L2(['miglior prezzo', 'best price'])) + '</span>' : '') + '</span>' +
+            '<span class="mute" style="font-size:12px">' + esc(x.origin || '') + (x.oqty && x.oqty !== l.qty ? ' · ' + esc(L2(['offre', 'offers'])) + ' ' + nf(x.oqty) : '') + '</span></button>';
+        }).join('');
+    }).join('');
+    var foot = '<div style="border-top:2px solid var(--ink);padding:10px 4px;font-weight:800">' + esc(L2(['Totale offerta', 'Offer total'])) + '</div>' + rfqs.map(function (r) {
+      if (r.status !== 'quotata') return '<div style="border-top:2px solid var(--ink)"></div>';
+      var cov = r.lines.filter(function (x) { return x.quoted; }).length;
+      return '<div style="border-top:2px solid var(--ink);padding:10px 4px;display:flex;flex-direction:column;gap:2px"><span class="j" style="font-weight:600">' + money(r.total, r.cur) + '</span><span class="j mute" style="font-size:11px">≈ ' + (r.cur === 'USD' ? money(toEur(r.total, 'USD'), 'EUR') : money(toUsd(r.total, 'EUR'), 'USD')) + '</span><span style="font-size:12px">' + esc(L2(['copertura', 'coverage'])) + ' ' + cov + '/' + r.lines.length + ((r.charges || []).some(function (c) { return c.amount; }) ? ' · ' + esc(L2(['spese incluse', 'charges incl.'])) : '') + '</span>' + (r.offer ? '<span class="mute" style="font-size:11px">' + esc(L2(['valida fino al', 'valid until'])) + ' ' + fd(r.offer.validTo) + '</span>' : '') + '</div>';
+    }).join('');
+    var sum = {}, totE = 0;
+    Object.keys(award).forEach(function (row) {
+      var r = byId(award[row]); if (!r) return; var x = rfqLine(r, +row); if (!x) return;
+      var e = offerEur(r, x); totE += e; (sum[r.id] = sum[r.id] || { n: 0, e: 0, r: r }).n++; sum[r.id].e += e;
+    });
+    var aw = Object.keys(sum).map(function (k) { return '<span>' + esc(supName(sum[k].r.sup)) + ' · ' + sum[k].n + ' ' + esc(L2(['righe', 'rows'])) + ' · <span class="j">' + money(sum[k].e, 'EUR') + '</span></span>'; }).join('');
+    return '<section class="card stack" id="cmp"><div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px"><h2>' + esc(L2(['Comparazione offerte', 'Quotation comparison'])) + ' <span class="j mute">' + quoted.length + '/' + rfqs.length + '</span></h2>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="preset" data-k="price">' + esc(L2(['Miglior prezzo', 'Best price'])) + '</button><button type="button" class="btn sm" data-act="preset" data-k="genuine">' + esc(L2(['Miglior prezzo Genuine', 'Best Genuine price'])) + '</button><button type="button" class="btn sm" data-act="preset" data-k="fast">' + esc(L2(['Consegna più rapida', 'Fastest delivery'])) + '</button><button type="button" class="btn sm ghost" data-act="preset" data-k="none">' + esc(L2(['Azzera', 'Clear'])) + '</button></div></div>' +
+      '<div style="overflow-x:auto"><div class="cmp" style="min-width:' + (180 + cols * 165) + 'px;grid-template-columns:minmax(170px,1.1fr) repeat(' + cols + ',minmax(160px,1fr))">' + head + body + foot + '</div></div>' +
+      (totE ? '<div class="note" style="display:flex;flex-wrap:wrap;gap:6px 22px;color:var(--ink)"><b>' + esc(L2(['Scelta', 'Selection'])) + '</b>' + aw + '<b class="j">' + money(totE, 'EUR') + ' · ' + money(totE * fx(), 'USD') + '</b></div>' : '<div class="mute" style="font-size:12px">' + esc(L2(['Clicca un\'offerta per sceglierla riga per riga, oppure usa una proposta automatica.', 'Click an offer to pick it row by row, or use an automatic proposal.'])) + '</div>') + '</section>';
+  }
+  function preset(rq, k) {
+    var rfqs = children(rq.id).filter(function (x) { return x.type === 'RFQ' && x.status === 'quotata' && x.lines; });
+    rq.award = {};
+    if (k === 'none') return;
+    rq.lines.forEach(function (l) {
+      var bestR = null, bestV = null;
+      rfqs.forEach(function (r) {
+        var x = rfqLine(r, l.row); if (!x || !x.quoted) return;
+        if (k === 'genuine' && x.cond !== 'Genuine') return;
+        var v = k === 'fast' ? (x.days == null ? 999 : x.days) * 1e6 + offerEur(r, x) : offerEur(r, x);
+        if (bestV == null || v < bestV) { bestV = v; bestR = r; }
+      });
+      if (bestR) rq.award[l.row] = bestR.id;
+    });
+  }
+
+  /* ---- forms ---- */
+  var FORMS = {
+    scroll: function () { var el = document.getElementById('cmp'); if (el) el.scrollIntoView({ behavior: 'smooth' }); },
+    gorq: function (d) { location.hash = '#/doc/' + d.from[0]; },
+    rfq: function (rq) {
+      var used = {}; children(rq.id).forEach(function (x) { if (x.type === 'RFQ') used[x.sup] = 1; });
+      var cnt = {}; DB.docs.forEach(function (x) { if (x.sup && (x.type === 'RFQ' || x.type === 'PO')) cnt[x.sup] = (cnt[x.sup] || 0) + 1; });
+      var sups = DB.suppliers.slice().sort(function (a, b) { return (cnt[b.id] || 0) - (cnt[a.id] || 0) || (a.name < b.name ? -1 : 1); });
+      var list = sups.map(function (s) {
+        return '<label class="suprow" data-name="' + esc(s.name.toUpperCase()) + '" style="flex-direction:row;align-items:center;gap:8px;color:var(--ink);padding:5px 6px;border-radius:6px"><input type="checkbox" name="sup" value="' + esc(s.id) + '"' + (used[s.id] ? ' disabled' : '') + '> <span style="flex:1">' + esc(s.name) + '</span><span class="j mute" style="font-size:11px">' + s.cur + ' · ' + (cnt[s.id] || 0) + ' doc' + (used[s.id] ? ' · RFQ ✓' : '') + '</span></label>';
+      }).join('');
+      var lines = rq.lines.map(function (l) { return '<label style="flex-direction:row;gap:8px;color:var(--ink)"><input type="checkbox" name="ln" value="' + l.row + '" checked> <span class="j">' + l.row + '</span> ' + esc(l.desc) + ' · <span class="j">' + nf(l.qty) + ' ' + esc(l.uom) + '</span></label>'; }).join('');
+      formModal(L2(['Richiedi quotazioni', 'Request quotations']) + ' · ' + rq.num,
+        '<label>' + esc(L2(['Fornitori (una RFQ per fornitore, nella sua valuta)', 'Suppliers (one RFQ each, in its currency)'])) + '<input type="search" name="flt" placeholder="' + esc(t('filterTxt')) + '"></label>' +
+        '<div style="max-height:34vh;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:4px">' + list + '</div>' +
+        '<div class="stack" style="gap:4px"><span class="mute" style="font-size:13px">' + esc(t('lines')) + '</span>' + lines + '</div>' +
+        '<label>' + esc(t('c_limit')) + '<input type="date" name="limit" value="' + addDays(TODAY, 7) + '"></label>',
+        function (f) {
+          var chosen = [].slice.call(f.querySelectorAll('input[name=sup]:checked')).map(function (x) { return x.value; });
+          var rows = [].slice.call(f.querySelectorAll('input[name=ln]:checked')).map(function (x) { return +x.value; });
+          if (!chosen.length || !rows.length) { toast(L2(['Scegli almeno un fornitore e una riga', 'Pick at least one supplier and one row'])); return false; }
+          chosen.forEach(function (sid) {
+            var sp = supById(sid);
+            newDoc('RFQ', rq.ship, { status: 'creata', desc: rq.desc, sup: sid, cur: sp.cur || 'EUR', fx: fx(), dept: rq.dept, limit: f.elements.limit.value, due: rq.due, demo: rq.demo, from: [rq.id],
+              lines: rq.lines.filter(function (l) { return rows.indexOf(l.row) >= 0; }).map(function (l) { return { row: l.row, src: l.row, item: l.item, code: l.code, impa: l.impa, desc: l.desc, note: l.note, uom: l.uom, qty: l.qty, asset: l.asset }; }) }, rq.num);
+          });
+          if (rq.status !== 'quotazione') setStatus(rq, 'quotazione', chosen.length + ' RFQ');
+          else rq.log.push({ at: TODAY, to: 'quotazione', txt: '+' + chosen.length + ' RFQ' });
+          save(); render(); toast(chosen.length + ' RFQ ' + L2(['create', 'created']));
+        }, { w: 640, onInput: function (e, f) { if (e.target.name === 'flt') { var q = e.target.value.toUpperCase(); [].forEach.call(f.querySelectorAll('.suprow'), function (r) { r.hidden = q && r.getAttribute('data-name').indexOf(q) < 0; }); } } });
+    },
+    mail: function (d, to) {
+      var sh = shipBy(d.ship), rq = d.from && byId(d.from[0]), sp = supById(d.sup) || {};
+      var subj = 'M/V ' + sh.name + ' · ' + (d.type === 'RFQ' ? 'RFQ ' : 'PURCHASE ORDER ') + d.num + (rq && d.type === 'RFQ' ? ' · ' + rq.num : '') + ' · ' + (sp.name || '');
+      var rows = d.lines.map(function (l) {
+        return l.row + '  ' + (l.impa ? 'IMPA ' + l.impa + '  ' : '') + l.desc + (l.note ? ' (' + l.note + ')' : '') + '  —  ' + nf(l.qty) + ' ' + l.uom +
+          (d.type === 'PO' ? '  x ' + nf(l.price) + (l.d1 ? ' -' + nf(l.d1, 1) + '%' : '') + ' = ' + money(l.net, d.cur) + (l.cond ? '  [' + l.cond + ']' : '') : '');
+      }).join('\n');
+      var body = d.type === 'RFQ'
+        ? 'Dear Sirs,\n\nPlease find below our Request for Quotation ' + d.num + ' for M/V ' + sh.name + '.\nKindly revert by ' + fd(d.limit) + ' with your best price, availability and delivery time, place of origin / stock and condition (Genuine, Non genuine or Reconditioned) for each item.\n\nThis inquiry is a request for quotation only and is NOT a purchase order. Kindly quote our RFQ number in all correspondence.\n\n' + rows + '\n\nBest regards'
+        : 'Dear Sirs,\n\nPlease find below our Purchase Order ' + d.num + ' for M/V ' + sh.name + (d.offerRef ? ', as per your quotation ' + d.offerRef : '') + '.\nKindly confirm acceptance, delivery date and dispatch details by return.\n\n' + rows +
+          (d.charges || []).filter(function (c) { return c.amount; }).map(function (c) { return '\n' + t('ch_' + c.kind) + ': ' + money(c.amount, d.cur); }).join('') + '\nTotal: ' + money(d.total, d.cur) +
+          '\n\nAll items must be asbestos free as per SOLAS regulation II-1/3-5 and supplied with MD/SDoC.\nInvoice to be issued only after delivery on board and receipt of the signed delivery note.\n\nBest regards';
+      formModal(L2(['Email al fornitore', 'Email to supplier']) + ' · ' + d.num,
+        '<label>' + esc(L2(['A', 'To'])) + '<input name="to" type="email" value="' + esc(sp.email || '') + '" placeholder="email@fornitore"></label>' +
+        '<label>' + esc(L2(['Oggetto', 'Subject'])) + '<input name="subj" value="' + esc(subj) + '"></label>' +
+        '<label>' + esc(L2(['Testo', 'Body'])) + '<textarea name="body" rows="14" class="j" style="font-size:12px">' + esc(body) + '</textarea></label>' +
+        '<div class="mute" style="font-size:12px">' + esc(L2(['Il prototipo non invia email: copia il testo in Outlook, poi segna il documento come inviato. La firma la aggiunge Outlook.', 'The prototype sends no email: copy the text into Outlook, then mark the document as sent.'])) + '</div>',
+        function (f) {
+          if (f.elements.to.value) sp.email = f.elements.to.value.trim();
+          setStatus(d, to, f.elements.to.value ? 'email ' + f.elements.to.value : 'email');
+          if (d.type === 'RFQ') d.sentAt = TODAY;
+          save(); render(); toast(L2(['Segnato come inviato', 'Marked as sent']));
+        }, { w: 760, ok: L2(['Segna come inviato', 'Mark as sent']), extra: '<button type="button" class="btn" data-copy="1">' + esc(L2(['Copia testo', 'Copy text'])) + '</button>',
+          onClick: function (e, f) {
+            if (!e.target.getAttribute('data-copy')) return;
+            var txt = f.elements.subj.value + '\n\n' + f.elements.body.value;
+            try { navigator.clipboard.writeText(txt).then(function () { toast(L2(['Testo copiato', 'Text copied'])); }, function () { f.elements.body.select(); }); } catch (x) { f.elements.body.select(); }
+          } });
+    },
+    offer2: function (d) {
+      var rows = d.lines.map(function (l, i) {
+        return '<tr><td class="j">' + l.row + '</td><td style="min-width:180px">' + esc(l.desc) + '<div class="mute j" style="font-size:11px">' + nf(l.qty) + ' ' + esc(l.uom) + '</div></td>' +
+          '<td><input type="checkbox" name="qt' + i + '" checked aria-label="' + esc(L2(['Quotato', 'Quoted'])) + '"></td>' +
+          '<td><input name="oq' + i + '" value="' + nf(l.qty) + '" inputmode="decimal" style="width:70px;text-align:right"></td>' +
+          '<td><input name="pr' + i + '" value="" inputmode="decimal" style="width:90px;text-align:right" placeholder="0,00"></td>' +
+          '<td><input name="dc' + i + '" value="" inputmode="decimal" style="width:52px;text-align:right" placeholder="%"></td>' +
+          '<td><select name="cd' + i + '">' + CONDS.map(function (c) { return '<option>' + c + '</option>'; }).join('') + '</select></td>' +
+          '<td><input name="or' + i + '" value="" style="width:150px" placeholder="' + esc(L2(['Paese · stock', 'Country · stock'])) + '"></td>' +
+          '<td><input name="dy' + i + '" value="" inputmode="numeric" style="width:52px;text-align:right" placeholder="gg"></td></tr>';
+      }).join('');
+      var sp = supById(d.sup) || {};
+      formModal(L2(['Offerta di ', 'Offer from ']) + (sp.name || '') + ' · ' + d.num,
+        '<div class="filters"><label>' + esc(t('currency')) + '<select name="cur"><option' + (d.cur === 'EUR' ? ' selected' : '') + '>EUR</option><option' + (d.cur === 'USD' ? ' selected' : '') + '>USD</option></select></label>' +
+        '<label>' + esc(t('extRef')) + '<input name="ref" value=""></label><label>' + esc(t('validDays')) + '<input name="days" value="30" inputmode="numeric" style="width:70px"></label></div>' +
+        '<div class="tablebox"><table class="grid edit" style="min-width:860px"><thead><tr><th>' + esc(t('l_row')) + '</th><th>' + esc(t('c_desc')) + '</th><th>' + esc(L2(['Quot.', 'Quoted'])) + '</th><th class="num">' + esc(L2(['Q.tà off.', 'Qty off.'])) + '</th><th class="num">' + esc(L2(['Prezzo unit.', 'Unit price'])) + '</th><th class="num">' + esc(t('l_disc')) + '</th><th>' + esc(L2(['Condizione', 'Condition'])) + '</th><th>' + esc(L2(['Origine / stock', 'Origin / stock'])) + '</th><th class="num">' + esc(L2(['Gg cons.', 'Days'])) + '</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+        '<div class="filters"><label>' + esc(t('ch_transport')) + '<input name="ch_transport" value="" inputmode="decimal" style="width:90px"></label><label>' + esc(t('ch_packing')) + '<input name="ch_packing" value="" inputmode="decimal" style="width:90px"></label><label>' + esc(t('ch_other')) + '<input name="ch_other" value="" inputmode="decimal" style="width:90px"></label></div>',
+        function (f) {
+          var any = false;
+          d.cur = f.elements.cur.value;
+          d.lines.forEach(function (l, i) {
+            l.quoted = f.elements['qt' + i].checked && parseNum(f.elements['pr' + i].value) > 0;
+            l.oqty = parseNum(f.elements['oq' + i].value) || l.qty; l.price = parseNum(f.elements['pr' + i].value); l.d1 = parseNum(f.elements['dc' + i].value); l.d2 = 0;
+            l.cond = f.elements['cd' + i].value; l.origin = f.elements['or' + i].value.trim(); l.days = f.elements['dy' + i].value === '' ? null : parseInt(f.elements['dy' + i].value, 10);
+            l.net = l.quoted ? Math.round(l.oqty * l.price * disc(l) * 100) / 100 : 0;
+            if (l.quoted) any = true;
+          });
+          if (!any) { toast(L2(['Inserisci almeno un prezzo', 'Enter at least one price'])); return false; }
+          d.charges = ['transport', 'packing', 'other'].map(function (k) { return { kind: k, amount: parseNum(f.elements['ch_' + k].value) }; }).filter(function (c) { return c.amount; });
+          d.total = docTotal(d);
+          var days = parseInt(f.elements.days.value, 10) || 30;
+          d.offer = { ref: f.elements.ref.value.trim(), date: TODAY, days: days, validTo: addDays(TODAY, days) };
+          setStatus(d, 'quotata', money(d.total, d.cur));
+          var rq = byId(d.from[0]);
+          if (rq && rq.status === 'quotazione' && !children(rq.id).some(function (x) { return x.type === 'RFQ' && (x.status === 'creata' || x.status === 'inviata'); })) setStatus(rq, 'quotata', L2(['tutte le offerte ricevute', 'all offers received']));
+          save(); render(); toast(L2(['Offerta registrata', 'Offer recorded']));
+        }, { w: 1000, extra: d.demo ? '<button type="button" class="btn" data-fill="1">' + esc(L2(['Compila offerta di esempio', 'Fill sample offer'])) + '</button>' : '',
+          onClick: function (e, f) { if (e.target.getAttribute('data-fill')) demoFill(d, f); } });
+    },
+    orders: function (rq) {
+      var award = rq.award || {}, by = {};
+      Object.keys(award).forEach(function (row) { var r = byId(award[row]); if (r) (by[r.id] = by[r.id] || { r: r, rows: [] }).rows.push(+row); });
+      var list = Object.keys(by).map(function (k) {
+        var r = by[k].r, tot = by[k].rows.reduce(function (a, row) { var x = rfqLine(r, row); return a + (x ? x.net : 0); }, 0);
+        return '<div style="display:flex;justify-content:space-between;gap:8px"><span>' + esc(supName(r.sup)) + ' · ' + by[k].rows.length + ' ' + esc(L2(['righe', 'rows'])) + '</span><span class="j">' + money(tot, r.cur) + '</span></div>';
+      }).join('');
+      var missing = rq.lines.filter(function (l) { return !award[l.row]; });
+      formModal(L2(['Crea ordini da approvare', 'Create orders for approval']),
+        '<div class="stack" style="gap:6px">' + list + '</div>' + (missing.length ? '<div class="note">' + esc(L2(['Righe senza scelta, restano aperte sulla richiesta: ', 'Rows without selection stay open: '])) + missing.map(function (l) { return l.row; }).join(', ') + '</div>' : '') +
+        '<div class="mute" style="font-size:12px">' + esc(L2(['Un ordine in bozza per fornitore. Le spese dell\'offerta (trasporto, imballo) passano sull\'ordine. Le RFQ non scelte restano in archivio.', 'One draft order per supplier. Offer charges carry over. RFQs not selected stay on file.'])) + '</div>',
+        function () {
+          var made = [];
+          Object.keys(by).forEach(function (k) {
+            var r = by[k].r, n = 0;
+            var lines = by[k].rows.sort(function (a, b) { return a - b; }).map(function (row) {
+              var x = rfqLine(r, row); n += 10;
+              return cloneLine(x, { row: n, src: x.row, rqRow: row, qty: x.oqty || x.qty, due: x.days != null ? addDays(TODAY, x.days) : rq.due, quoted: true });
+            });
+            var po = newDoc('PO', rq.ship, { status: 'bozza', desc: rq.desc, sup: r.sup, cur: r.cur, fx: r.fx || fx(), dept: rq.dept, prio: rq.prio, demo: rq.demo, from: [r.id], lines: lines,
+              charges: (r.charges || []).map(function (c) { return { kind: c.kind, amount: c.amount }; }), offerRef: r.offer && r.offer.ref, terms: 'Material delivery within ' + Math.max.apply(null, lines.map(function (l) { return l.days || 0; })) + ' days from PO date', mdsdoc: true,
+              due: lines.reduce(function (m, l) { return l.due && l.due > m ? l.due : m; }, '') || rq.due }, r.num);
+            po.total = docTotal(po); made.push(po);
+            r.awarded = true;
+          });
+          setStatus(rq, 'ordinata', made.map(function (p) { return p.num; }).join(', '));
+          save(); render(); toast(made.length + ' ' + L2(['ordini in bozza creati', 'draft orders created']));
+        }, { ok: L2(['Crea ordini', 'Create orders']) });
+    },
+    approve: function (po) {
+      var pa = postable(po.ship), pref = po.dept === 'DECK' ? '00-2-' : '00-3-', B = budgetAgg(po.ship);
+      var def = po.account || (pa.filter(function (a) { return a.path.indexOf(pref) === 0; })[0] || pa[0] || {}).path;
+      var poE = toEur(po.total, po.cur);
+      function impact(acc) {
+        var v = B[acc] || { b: 0, o: 0, d: 0 }, before = v.b - v.o - v.d;
+        if (!v.b) return '<span class="t-warn">' + esc(L2(['Conto senza budget: la spesa finisce fuori budget.', 'Account without budget: spend goes off budget.'])) + '</span>';
+        return '<div class="kv"><dt>' + esc(t('b_budget')) + '</dt><dd class="j">' + money(v.b, 'EUR') + '</dd><dt>' + esc(L2(['Ordinato + consegnato', 'Ordered + delivered'])) + '</dt><dd class="j">' + money(v.o + v.d, 'EUR') + '</dd>' +
+          '<dt>' + esc(L2(['Questo ordine', 'This order'])) + '</dt><dd class="j">' + money(poE, 'EUR') + '</dd><dt><b>' + esc(L2(['Residuo dopo', 'Remaining after'])) + '</b></dt><dd class="j ' + (before - poE < 0 ? 't-bad' : 't-ok') + '"><b>' + money(before - poE, 'EUR') + '</b></dd></div>';
+      }
+      formModal(t('appr') + ' · ' + po.num,
+        '<div class="kv"><dt>' + esc(t('c_sup')) + '</dt><dd>' + esc(supName(po.sup)) + '</dd><dt>' + esc(t('c_total')) + '</dt><dd class="j">' + money(po.total, po.cur) + ' · ≈ ' + money(poE, 'EUR') + '</dd></div>' +
+        '<label>' + esc(L2(['Conto di budget', 'Budget account'])) + '<select name="acc">' + acctOptions(po.ship, def) + '</select></label><div id="impact" class="note" style="color:var(--ink)">' + impact(def) + '</div>' +
+        '<label>' + esc(t('note')) + '<textarea name="note" rows="2"></textarea></label>' +
+        '<div class="mute" style="font-size:12px">' + esc(L2(['Approva chiunque: resta traccia di data e nota nella cronologia.', 'Anyone can approve: date and note stay in the history.'])) + '</div>',
+        function (f) { po.account = f.elements.acc.value; setStatus(po, 'approvato', po.account + (f.elements.note.value ? ' · ' + f.elements.note.value : '')); save(); render(); toast(L2(['Ordine approvato', 'Order approved'])); },
+        { w: 620, ok: L2(['Approva', 'Approve']), onInput: function (e, f) { if (e.target.name === 'acc') f.querySelector('#impact').innerHTML = impact(e.target.value); } });
+      var sel = document.querySelector('.modal select[name=acc]'); if (sel) sel.addEventListener('change', function () { document.getElementById('impact').innerHTML = impact(sel.value); });
+    },
+    dn: function (po) {
+      var res = poResidual(po);
+      var rows = po.lines.map(function (l, i) {
+        return res[i] > 0 ? '<tr><td class="j">' + l.row + '</td><td>' + esc(l.desc) + '</td><td class="num j">' + nf(res[i]) + ' ' + esc(l.uom) + '</td><td><input name="q' + i + '" value="' + nf(res[i]) + '" inputmode="decimal" style="width:80px;text-align:right"></td></tr>' : '';
+      }).join('');
+      formModal(L2(['Merce pronta · nuova consegna', 'Goods ready · new delivery']) + ' · ' + po.num,
+        '<div class="tablebox"><table class="grid edit" style="min-width:520px"><thead><tr><th>' + esc(t('l_row')) + '</th><th>' + esc(t('c_desc')) + '</th><th class="num">' + esc(t('l_res')) + '</th><th>' + esc(L2(['Da spedire', 'To ship'])) + '</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+        '<label>' + esc(L2(['Percorso', 'Route'])) + '<select name="route"><option value="hub">' + esc(L2(['Via hub spedizioniere', 'Via forwarder hub'])) + '</option><option value="direct">' + esc(L2(['Diretta a bordo (porto vicino)', 'Direct to vessel (nearby port)'])) + '</option></select></label>' +
+        '<label>' + esc(L2(['Hub / luogo di ritiro', 'Hub / pickup place'])) + '<input name="hub" value="' + esc(DB.meta.demo ? 'Hub spedizioniere' : 'TAILOR MADE LOGISTIC') + '"></label>' +
+        '<label>' + esc(L2(['Porto di consegna a bordo', 'Port of delivery on board'])) + '<input name="port" value=""></label>' +
+        '<label>' + esc(L2(['Arrivo a bordo previsto', 'Expected on board'])) + '<input type="date" name="eta" value="' + addDays(TODAY, 10) + '"></label>',
+        function (f) {
+          var lines = [];
+          po.lines.forEach(function (l, i) { if (res[i] > 0) { var q = Math.min(res[i], parseNum(f.elements['q' + i].value)); if (q > 0) lines.push({ row: l.row, src: l.row, item: l.item, code: l.code, impa: l.impa, desc: l.desc, note: l.note, uom: l.uom, qty: q, recv: null, cond: l.cond }); } });
+          if (!lines.length) { toast(L2(['Nessuna quantità da spedire', 'Nothing to ship'])); return false; }
+          var route = f.elements.route.value, hub = f.elements.hub.value.trim(), port = f.elements.port.value.trim();
+          var dn = newDoc('DN', po.ship, { status: 'pronta', desc: po.desc, sup: po.sup, dept: po.dept, demo: po.demo, from: [po.id], lines: lines, route: route, hub: hub, port: port, due: f.elements.eta.value,
+            deliverTo: (route === 'hub' ? hub : L2(['Diretta a bordo', 'Direct on board'])) + (port ? ' → ' + port : ''), terms: 'Dispatch Instructions' }, po.num);
+          save(); location.hash = '#/doc/' + dn.id; toast(L2(['Consegna creata', 'Delivery created']));
+        }, { w: 700, ok: L2(['Crea consegna', 'Create delivery']) });
+    },
+    ft: function (dn) {
+      var po = byId(dn.from[0]); if (!po || !po.lines) { toast('PO ?'); return; }
+      var goods = 0, lines = [];
+      dn.lines.forEach(function (l) {
+        var pl = po.lines.filter(function (x) { return x.row === l.src; })[0]; if (!pl || !l.recv) return;
+        var net = Math.round(l.recv * pl.price * disc(pl) * 100) / 100; goods += net;
+        lines.push(cloneLine(pl, { qty: l.recv, net: net }));
+      });
+      goods = Math.round(goods * 100) / 100;
+      var accDef = DB.accounts.some(function (a) { return a.path === '00-13--1301'; }) ? '00-13--1301' : po.account;
+      var kinds = ['transport', 'hub', 'customs', 'bank', 'other'];
+      var chRows = kinds.map(function (k) { return '<tr><td>' + esc(t('ch_' + k)) + '</td><td><input name="a_' + k + '" inputmode="decimal" style="width:100px;text-align:right" placeholder="0,00"></td><td><select name="c_' + k + '">' + acctOptions(po.ship, k === 'bank' ? po.account : accDef) + '</select></td></tr>'; }).join('');
+      formModal(L2(['Fattura fornitore', 'Supplier invoice']) + ' · ' + supName(po.sup),
+        '<div class="filters"><label>' + esc(L2(['Numero fattura', 'Invoice number'])) + '<input name="num" required></label><label>' + esc(t('c_date')) + '<input type="date" name="date" value="' + TODAY + '"></label><label>' + esc(L2(['Pagamento (giorni)', 'Payment (days)'])) + '<input name="pay" value="60" inputmode="numeric" style="width:70px"></label></div>' +
+        '<div class="kv"><dt>' + esc(L2(['Merce ricevuta da ordine', 'Received goods per order'])) + '</dt><dd class="j">' + money(goods, po.cur) + ' (' + esc(po.num) + ')</dd></div>' +
+        '<label>' + esc(L2(['Merce fatturata', 'Invoiced goods'])) + ' (' + po.cur + ')<input name="goods" value="' + nf(goods) + '" inputmode="decimal"></label>' +
+        '<div class="mute" style="font-size:13px">' + esc(L2(['Spese extra non presenti in offerta e ordine: vanno a budget sul conto scelto', 'Extra charges not in quote or order: booked to the chosen budget account'])) + '</div>' +
+        '<div class="tablebox"><table class="grid edit" style="min-width:560px"><thead><tr><th>' + esc(L2(['Voce', 'Item'])) + '</th><th>' + esc(t('l_net')) + ' ' + po.cur + '</th><th>' + esc(L2(['Conto di budget', 'Budget account'])) + '</th></tr></thead><tbody>' + chRows + '</tbody></table></div>',
+        function (f) {
+          var ch = kinds.map(function (k) { return { kind: k, amount: parseNum(f.elements['a_' + k].value), account: f.elements['c_' + k].value }; }).filter(function (c) { return c.amount; });
+          (po.charges || []).forEach(function (c) { if (c.amount) ch.unshift({ kind: c.kind, amount: c.amount, account: po.account, note: L2(['da ordine', 'per order']) }); });
+          var gd = parseNum(f.elements.goods.value), date = f.elements.date.value || TODAY;
+          var ft = newDoc('FT', dn.ship, { status: 'registrata', desc: dn.desc, sup: po.sup, cur: po.cur, fx: po.fx || fx(), dept: po.dept, demo: dn.demo, from: [dn.id], lines: lines,
+            goods: gd, poGoods: goods, charges: ch, inv: { num: f.elements.num.value.trim(), date: date }, orig: f.elements.num.value.trim(), date: date, due: addDays(date, parseInt(f.elements.pay.value, 10) || 60) }, f.elements.num.value.trim());
+          ft.total = Math.round((gd + ch.reduce(function (a, c) { return a + c.amount; }, 0)) * 100) / 100;
+          save(); location.hash = '#/doc/' + ft.id; toast(L2(['Fattura registrata', 'Invoice booked']));
+        }, { w: 720, ok: L2(['Registra fattura', 'Book invoice']) });
+    }
+  };
+  function poResidual(po) {
+    var shipped = {};
+    docs(function (x) { return x.type === 'DN' && x.from && x.from[0] === po.id && x.lines; }).forEach(function (dn) { dn.lines.forEach(function (l) { shipped[l.src] = (shipped[l.src] || 0) + (dn.status === 'ricevuta' ? (l.recv || 0) : l.qty); }); });
+    return po.lines.map(function (l) { return Math.max(0, l.qty - (shipped[l.row] || 0)); });
+  }
+
+  /* ---- demo case ---- */
+  var DEMO_OFFERS = [
+    { origin: ['Germania · stock Napoli', 'Germania · da produrre', 'Germania · stock Napoli'], cond: ['Genuine', 'Genuine', 'Genuine'], eur: [206, 1180, 48], days: [5, 21, 5], ch: { transport: 35 } },
+    { origin: ['Cina · stock Dubai', 'Cina · stock Dubai', 'Cina · stock Dubai'], cond: ['Non genuine', 'Non genuine', 'Non genuine'], eur: [138.32, 705.53, 25.07], days: [12, 12, 12], ch: {} },
+    { origin: ['Germania · stock Pireo', 'Ricondizionato · Pireo', null], cond: ['Genuine', 'Usato', null], eur: [182.5, 640, null], days: [8, 4, null], ch: { packing: 20 } }
+  ];
+  function demoFill(rfq, f) {
+    var rq = byId(rfq.from[0]), idx = children(rq.id).filter(function (x) { return x.type === 'RFQ'; }).indexOf(rfq) % 3, o = DEMO_OFFERS[idx];
+    var cur = f.elements.cur.value, k = cur === 'USD' ? fx() : 1;
+    f.elements.ref.value = 'Q-' + (2600 + idx * 37) + '/26';
+    rfq.lines.forEach(function (l, i) {
+      var j = rq.lines.map(function (x) { return x.row; }).indexOf(l.src); if (j < 0 || j > 2) j = i % 3;
+      var on = o.eur[j] != null;
+      f.elements['qt' + i].checked = on;
+      f.elements['pr' + i].value = on ? nf(o.eur[j] * k) : '';
+      f.elements['cd' + i].value = o.cond[j] || 'Genuine';
+      f.elements['or' + i].value = o.origin[j] || '';
+      f.elements['dy' + i].value = o.days[j] != null ? o.days[j] : '';
+    });
+    ['transport', 'packing', 'other'].forEach(function (c) { f.elements['ch_' + c].value = o.ch[c] ? nf(o.ch[c] * k) : ''; });
+  }
+  function makeDemo() {
+    var d = { id: 'DEMO-RQ', type: 'RQ', num: nextNum('MDT', 'RQ'), ship: 'MDT', desc: 'Ricambi pompa acqua mare raffreddamento n.1', status: 'endorsed', side: 'office', dept: 'ENG', prio: 'urgente',
+      date: addDays(TODAY, -2), due: addDays(TODAY, 25), demo: true, proto: true, from: [],
+      lines: [
+        { row: 10, code: '', impa: '', desc: 'MECHANICAL SEAL', note: 'Cooling sea water pump No.1 · shaft 45 mm', uom: 'PCE', qty: 2, asset: 'SW cooling pump No.1' },
+        { row: 20, code: '', impa: '', desc: 'IMPELLER', note: 'Cooling sea water pump No.1 · bronze', uom: 'PCE', qty: 1, asset: 'SW cooling pump No.1' },
+        { row: 30, code: '', impa: '', desc: 'GASKET SET, PUMP CASING', note: 'Cooling sea water pump No.1', uom: 'SET', qty: 2, asset: 'SW cooling pump No.1' }],
+      log: [{ at: addDays(TODAY, -3), to: 'bozza', txt: L2(['Bozza a bordo', 'Draft on board']) }, { at: addDays(TODAY, -2), to: 'endorsed', txt: L2(['Endorsed dal Direttore di macchina', 'Endorsed by Chief Engineer']) }] };
+    DB.docs.push(d);
+  }
+  function ensureDemo() { if (!byId('DEMO-RQ')) { makeDemo(); save(); } }
+  function resetDemo() {
+    var ids = {}; DB.docs.forEach(function (d) { if (d.demo) ids[d.id] = 1; });
+    DB.docs = DB.docs.filter(function (d) { return !d.demo; });
+    DB.moves = (DB.moves || []).filter(function (m) { return !ids[m.doc]; });
+    makeDemo(); save();
+  }
+
+  var CLICK = {
+    newrq: function (a) {
+      var nave = a.getAttribute('data-ship') || 'MDT';
+      var shipOpts = DB.ships.map(function (s) { return '<option value="' + s.code + '"' + (s.code === nave ? ' selected' : '') + '>' + s.code + ' · ' + esc(s.name) + '</option>'; }).join('');
+      formModal(L2(['Nuova richiesta', 'New requisition']),
+        '<label>' + esc(t('c_ship')) + '<select name="ship">' + shipOpts + '</select></label><label>' + esc(t('c_desc')) + '<input name="desc" required></label>' +
+        '<div class="filters"><label>' + esc(t('c_dept')) + '<select name="dept"><option value="ENG">' + esc(t('ENG')) + '</option><option value="DECK">' + esc(t('DECK')) + '</option><option value="SAFETY">' + esc(t('SAFETY')) + '</option></select></label>' +
+        '<label>' + esc(L2(['Priorità', 'Priority'])) + '<select name="prio">' + Object.keys(PRIO).map(function (k) { return '<option value="' + k + '">' + esc(L2(PRIO[k])) + '</option>'; }).join('') + '</select></label>' +
+        '<label>' + esc(t('c_due')) + '<input type="date" name="due" value="' + addDays(TODAY, 30) + '"></label></div>',
+        function (f) {
+          var d = newDoc('RQ', f.elements.ship.value, { status: 'bozza', desc: f.elements.desc.value.trim(), dept: f.elements.dept.value, prio: f.elements.prio.value, due: f.elements.due.value, side: P.seat === 'ship' ? 'ship' : 'office', lines: [] });
+          save(); location.hash = '#/doc/' + d.id;
+        }, { ok: L2(['Crea', 'Create']) });
+    },
+    addline: function () {
+      var d = curDoc(); if (!d || !editable(d)) return;
+      var v = (document.getElementById('additem') || {}).value || '', it = null;
+      (DB.items || []).forEach(function (x) { if ((x.impa ? x.impa + ' · ' : '') + x.desc === v) it = x; });
+      var row = d.lines.reduce(function (m, l) { return Math.max(m, l.row); }, 0) + 10;
+      d.lines.push(it ? { row: row, item: it.id, code: it.code, impa: it.impa, desc: it.desc, note: '', uom: it.uom, qty: 1 } : { row: row, code: '', impa: '', desc: v.trim(), note: '', uom: 'PCE', qty: 1 });
+      save(); render();
+    },
+    delline: function (a) { var d = curDoc(); if (!d || !editable(d)) return; d.lines.splice(+a.getAttribute('data-i'), 1); save(); render(); },
+    award: function (a) {
+      var d = curDoc(); if (!d) return; d.award = d.award || {};
+      var row = a.getAttribute('data-row'), id = a.getAttribute('data-rfq');
+      if (d.award[row] === id) delete d.award[row]; else d.award[row] = id;
+      save(); render(); var el = document.getElementById('cmp'); if (el) el.scrollIntoView();
+    },
+    preset: function (a) { var d = curDoc(); if (!d) return; preset(d, a.getAttribute('data-k')); save(); render(); var el = document.getElementById('cmp'); if (el) el.scrollIntoView(); },
+    demoreset: function () { resetDemo(); render(); toast(L2(['Pratica demo ripartita', 'Demo case restarted'])); }
+  };
+
   /* ---------- global search ---------- */
   function searchAll(q) {
     q = q.trim().toUpperCase(); if (q.length < 2) return [];
@@ -887,11 +1372,12 @@
     else if (act === 'seat') { P.seat = P.seat === 'ship' ? 'office' : 'ship'; savePrefs(); render(); toast(t(P.seat === 'ship' ? 'seatShip' : 'seatOffice')); }
     else if (act === 'consume' || act === 'count') { stockModal(act, a.getAttribute('data-item'), a.getAttribute('data-ship')); }
     else if (act === 'reorder') { reorder(a.getAttribute('data-ship')); }
+    else if (CLICK[act]) { CLICK[act](a, r); }
     else if (act === 'colmenu') { UI.colOpen = !UI.colOpen; render(); }
     else if (act === 'bexp') { UI.expanded[a.getAttribute('data-k')] = a.getAttribute('data-o') !== '1'; render(); }
     else if (act === 'adv') {
       var d = byId(r.seg[1]), to = a.getAttribute('data-to'), form = a.getAttribute('data-form');
-      if (form === 'offer') {
+      if (form === 'offer' && !(d.lines && d.lines.length)) {
         var sp = supById(d.sup);
         modal(ST.RFQ.quotata[P.lang === 'en' ? 1 : 0], [
           { n: 'tot', l: t('offerTotal'), v: d.total ? nf(d.total) : '', req: 1, num: 1 },
@@ -901,9 +1387,10 @@
           d.total = parseNum(v.tot); d.cur = v.cur; d.offer = { ref: v.ref, days: parseInt(v.days, 10) || 30, at: TODAY };
           advance(d, to, money(d.total, d.cur));
         });
-      } else if (form === 'approve') {
+      } else if (form === 'approve' && !(d.lines && d.lines.length)) {
         modal(t('appr'), [{ n: 'note', l: t('note'), type: 'area' }], function (v) { advance(d, to, v.note); });
       } else if (form === 'receive') { receiveModal(d);
+      } else if (FORMS[form]) { FORMS[form](d, to);
       } else advance(d, to);
     }
     else if (act === 'cancel') {
@@ -927,6 +1414,7 @@
       P.cols[tipo] = cols; savePrefs(); render(); return;
     }
     if (el.getAttribute('data-act') === 'zero') { UI.showZero = el.checked; render(); return; }
+    if (el.getAttribute('data-edit')) { editLine(el); return; }
     if (el.getAttribute('data-act') === 'minstock') { var k2 = el.getAttribute('data-k'); DB.stock = DB.stock || {}; DB.stock[k2] = Math.max(0, parseNum(el.value)); save(); render(); toast(t('minSaved')); return; }
     if (el.getAttribute('data-act') === 'import') {
       var f = el.files && el.files[0]; if (!f) return;
@@ -957,5 +1445,6 @@
     if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) { var s = document.getElementById('gsearch'); if (s) { s.focus(); s.select(); e.preventDefault(); } }
   });
 
+  ensureDemo();
   render();
 })();
