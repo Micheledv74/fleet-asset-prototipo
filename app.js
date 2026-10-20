@@ -224,6 +224,7 @@
       }
       if (d.type === 'FT') (d.charges || []).forEach(function (c) { if (c.account && c.amount) add(c.account, 0, toEur(c.amount, d.cur)); });
     });
+    if (DB.shipments) shipmentBudget(ship, add);
     return out;
   }
   function yearFrac() { var y = TODAY.slice(0, 4); return Math.min(1, (daysBetween(y + '-01-01', TODAY) + 1) / 365); }
@@ -248,20 +249,8 @@
     var r = route();
     var ship = r.q.nave || (active === 'ship' ? r.seg[1] : '');
     return '<div class="app">' +
-      '<nav class="rail" aria-label="' + esc(t('fleet')) + '"><div class="brand">' + esc(ship || 'FLEET') + '</div>' +
-      railLink('#/', 'fleet', t('fleet'), active === 'home' || active === 'ship') +
-      railLink('#/docs' + qs({ tipo: 'RQ', nave: ship }), 'cart', t('purchasing'), active === 'docs' || active === 'doc') +
-      railLink('#/modulo/pms', 'gear', t('pms'), active === 'pms') +
-      railLink('#/logistica' + qs({ nave: ship }), 'cal', L2(['Logistica', 'Logistics']), active === 'logistica') +
-      railLink('#/magazzino' + qs({ nave: ship || 'PEP' }), 'box', t('stores'), active === 'magazzino') +
-      railLink('#/documenti', 'doc', L2(['Documenti', 'Documents']), active === 'documenti') +
-      railLink('#/modulo/certificati', 'doc', t('certs'), active === 'certificati') +
-      railLink('#/scadenze' + qs({ nave: ship }), 'cal', t('due'), active === 'scadenze') +
-      railLink('#/budget' + qs({ nave: ship || 'PEP' }), 'chart', t('budget'), active === 'budget') +
-      railLink('#/fornitori', 'ppl', t('suppliers'), active === 'fornitori') +
-      railLink('#/contabilita', 'doc', L2(['Contabilità', 'Accounting']), active === 'contabilita') +
-      '<div class="sp"></div>' + railLink('#/impostazioni', 'doc', L2(['Modelli', 'Templates']), active === 'impostazioni') + railLink('#/dati', 'db', t('data'), active === 'dati') +
-      '</nav><div class="main"><header class="top">' +
+      railHtml(active, ship) +
+      '<div class="main"><header class="top">' +
       '<div class="crumbs"><small>' + crumbs + '</small><b>' + esc(title) + '</b></div>' +
       '<div class="search"><label>' + ico('search') + '<input id="gsearch" type="search" autocomplete="off" aria-label="' + esc(t('search')) + '" placeholder="' + esc(t('search')) + '"><span class="kbd j">Ctrl K</span></label><div id="gres"></div></div>' +
       '<div class="tools">' + (DB.meta.demo ? '<a class="chip c-warn" href="#/dati" style="text-decoration:none">' + esc(P.lang === 'en' ? 'Sample data' : 'Dati di esempio') + '</a>' : '') + '<label class="fx j" title="' + esc(t('fxLabel')) + '">1 € = <input id="fxin" class="j" value="' + nf(fx(), 4) + '" aria-label="' + esc(t('fxLabel')) + '"> $</label>' +
@@ -507,11 +496,11 @@
       (d.prio && d.prio !== 'normale' ? '<span class="chip c-bad">' + esc(L2(PRIO[d.prio])) + '</span>' : '') + (d.demo ? '<span class="chip c-acc">DEMO</span>' : '') +
       '<span class="chip c-neutral">' + esc(t('c_side')) + ': ' + esc(t(d.side)) + '</span>' + (d.dept ? '<span class="chip c-neutral">' + esc(t(d.dept)) + '</span>' : '') +
       (d.rev ? '<span class="chip c-warn">Rev. ' + d.rev + '</span>' : '') +
-      ((d.type === 'RFQ' || d.type === 'PO') && d.lines && d.lines.length ? '<button class="btn sm" data-act="pdf">PDF</button>' : '') +
+      ((d.type === 'RFQ' || d.type === 'PO') && d.lines && d.lines.length ? '<button class="btn sm" data-act="pdf">PDF</button>' : '') + (feat('link') && d.type === 'RFQ' && d.lines && d.lines.length && { creata: 1, inviata: 1, quotata: 1 }[d.status] ? '<button class="btn sm" data-act="suplink">' + esc(L2(['Link fornitore', 'Supplier link'])) + '</button>' : '') +
       (UI.edit && UI.edit.id === d.id ? '' : '<button class="btn sm" data-act="editstart">' + esc(L2(['Modifica', 'Edit'])) + '</button>') + '</div>' +
       (UI.edit && UI.edit.id === d.id ? editHeader(d) : '<h1 class="h1">' + esc(d.desc || '—') + '</h1>' + (d.note ? '<div class="note">' + esc(d.note) + '</div>' : '')) + '</div>';
     var body = '<div class="row">' + pathHtml +
-      '<div class="grow stack" style="gap:14px">' + head + (d.type === 'DN' ? logisticsCard(d) : '') + info + lines + ({ RQ: 1, RFQ: 1, PO: 1, DN: 1, FT: 1 }[d.type] ? attSection(d) : '') + '</div>' +
+      '<div class="grow stack" style="gap:14px">' + head + (d.type === 'DN' ? (feat('qr') ? qrCard(d) : '') + logisticsCard(d) : '') + info + lines + ({ RQ: 1, RFQ: 1, PO: 1, DN: 1, FT: 1 }[d.type] ? attSection(d) : '') + '</div>' +
       '<aside class="side">' + nextHtml + '<section class="card stack"><h2>' + esc(t('chain')) + '</h2><div class="chain">' + chainHtml + '</div></section>' +
       '<section class="card stack"><h2>' + esc(t('history')) + '</h2><div class="log">' + log + '</div></section></aside></div>';
     return shell('doc', crumb([[t('fleet'), '#/'], [shipBy(d.ship).name, '#/nave/' + d.ship], [t(d.type), '#/docs' + qs({ tipo: d.type, nave: d.ship })]]), t(d.type + '1') + ' ' + d.num, body);
@@ -618,7 +607,7 @@
       kpiBox(t('s_po'), st.po, nf(st.ord, 0) + ' €', 'mute', '#/docs' + qs({ tipo: 'PO', q: s.name })) +
       kpiBox(t('s_cur'), s.cur, s.id, 'mute', '#/fornitore/' + encodeURIComponent(id)) +
       kpiBox(t('poOpen'), rows.filter(function (d) { return d.type === 'PO' && isOpen(d); }).length, rows.filter(function (d) { return d.type === 'PO' && isLate(d); }).length + ' ' + t('late'), 'bad', '#/docs' + qs({ tipo: 'PO', q: s.name, aperti: 1 })) + '</div>' +
-      '<h2 style="margin:0;font-size:15px">' + esc(t('s_hist')) + '</h2>' + gridTable(rows, ['num', 'type', 'ship', 'desc', 'status', 'total', 'date'], null, null);
+      (feat('score') ? scoreCard(id) : '') + '<h2 style="margin:0;font-size:15px">' + esc(t('s_hist')) + '</h2>' + gridTable(rows, ['num', 'type', 'ship', 'desc', 'status', 'total', 'date'], null, null);
     return shell('fornitori', crumb([[t('fleet'), '#/'], [t('suppliers'), '#/fornitori']]), s.name, body);
   }
 
@@ -966,7 +955,7 @@
     var rows = d.lines.map(function (l, i) {
       return '<tr><td class="j">' + l.row + '</td>' +
         '<td><input class="j" data-edit="' + i + '|impa" value="' + esc(l.impa || '') + '" style="width:90px" aria-label="IMPA"></td>' +
-        '<td><input data-edit="' + i + '|desc" value="' + esc(l.desc) + '" style="width:100%" aria-label="' + esc(t('c_desc')) + '"><input data-edit="' + i + '|note" value="' + esc(l.note || '') + '" placeholder="P/N, maker, note" style="width:100%;margin-top:4px;font-size:12px" aria-label="note"></td>' +
+        '<td><input data-edit="' + i + '|desc" value="' + esc(l.desc) + '" style="width:100%" aria-label="' + esc(t('c_desc')) + '"><input data-edit="' + i + '|note" value="' + esc(l.note || '') + '" placeholder="P/N, maker, note" style="width:100%;margin-top:4px;font-size:12px" aria-label="note">' + (feat('catalog') && !l.item && l.desc ? suggHtml(l, i) : '') + '</td>' +
         '<td><input data-edit="' + i + '|asset" value="' + esc(l.asset || '') + '" style="width:150px" aria-label="Asset"></td>' +
         '<td><input class="j" data-edit="' + i + '|qty" value="' + nf(l.qty) + '" inputmode="decimal" style="width:80px;text-align:right" aria-label="' + esc(t('l_qty')) + '"></td>' +
         '<td><input data-edit="' + i + '|uom" value="' + esc(l.uom || 'PCE') + '" style="width:62px" aria-label="' + esc(t('l_uom')) + '"></td>' +
@@ -1002,7 +991,7 @@
     });
     var cols = rfqs.length;
     var head = '<div style="padding:6px 4px;font-size:12px" class="mute">' + esc(t('l_row')) + '</div>' + rfqs.map(function (r) {
-      return '<div style="padding:6px 4px;display:flex;flex-direction:column;gap:4px;align-items:flex-start"><a href="#/doc/' + r.id + '" style="font-weight:700;color:var(--ink);text-decoration:none">' + esc(supName(r.sup)) + '</a><span class="j mute" style="font-size:11px">' + esc(r.num) + ' · ' + esc(r.cur) + (r.offer && r.offer.incoterm ? ' · ' + esc(r.offer.incoterm + (r.offer.place ? ' ' + r.offer.place : '')) : '') + '</span>' + chip(r) +
+      return '<div style="padding:6px 4px;display:flex;flex-direction:column;gap:4px;align-items:flex-start"><a href="#/doc/' + r.id + '" style="font-weight:700;color:var(--ink);text-decoration:none">' + esc(supName(r.sup)) + '</a>' + '<span class="j mute" style="font-size:11px">' + esc(r.num) + ' · ' + esc(r.cur) + (r.offer && r.offer.incoterm ? ' · ' + esc(r.offer.incoterm + (r.offer.place ? ' ' + r.offer.place : '')) : '') + '</span>' + chip(r) + (feat('score') ? scoreBadge(r.sup) : '') + (r.offer && r.offer.via === 'link' ? '<span class="chip c-info" style="font-size:10px">via link</span>' : '') +
         (r.status === 'quotata' ? '<button type="button" class="btn sm" data-act="awardall" data-rfq="' + r.id + '">' + esc(L2(['Scegli tutta l\'offerta', 'Pick whole offer'])) + '</button>' : '') + '</div>';
     }).join('');
     var body = rq.lines.map(function (l) {
@@ -1016,24 +1005,25 @@
             '<span style="display:flex;justify-content:space-between;gap:6px"><span class="j" style="font-weight:600">' + money(x.net, r.cur) + '</span><span style="font-size:11px;font-weight:800;color:var(--accText)">' + (on ? esc(L2(['SCELTA', 'SELECTED'])) : '') + '</span></span>' +
             '<span class="j mute" style="font-size:11px">' + nf(x.price) + (x.d1 ? ' −' + nf(x.d1, 0) + '%' : '') + ' /' + esc(l.uom) + ' · ≈ ' + (r.cur === 'USD' ? money(v, 'EUR') : money(v * fx(), 'USD')) + '</span>' +
             '<span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">' + condChip(x.cond) + '<span class="j" style="font-size:11px">' + (x.days != null ? x.days + ' gg' : '') + '</span>' + (Math.abs(v - best[l.row]) < 0.005 ? '<span style="font-size:11px;font-weight:700;color:var(--teal)">' + esc(L2(['miglior prezzo', 'best price'])) + '</span>' : '') + '</span>' +
-            '<span class="mute" style="font-size:12px">' + esc(x.origin || '') + (x.oqty && x.oqty !== l.qty ? ' · ' + esc(L2(['offre', 'offers'])) + ' ' + nf(x.oqty) : '') + '</span></button>';
+            '<span class="mute" style="font-size:12px">' + esc(x.origin || '') + (x.oqty && x.oqty !== l.qty ? ' · ' + esc(L2(['offre', 'offers'])) + ' ' + nf(x.oqty) : '') + '</span>' + (feat('landed') && landed(r) ? '<span class="j" style="font-size:11px;color:var(--accText)">' + esc(L2(['a bordo ≈ ', 'landed ≈ '])) + money(v * landed(r).f, 'EUR') + '</span>' : '') + '</button>';
         }).join('');
     }).join('');
     var foot = '<div style="border-top:2px solid var(--ink);padding:10px 4px;font-weight:800">' + esc(L2(['Totale offerta', 'Offer total'])) + '</div>' + rfqs.map(function (r) {
       if (r.status !== 'quotata') return '<div style="border-top:2px solid var(--ink)"></div>';
+      var lf = feat('landed') ? landedFoot(r) : '';
       var cov = r.lines.filter(function (x) { return x.quoted; }).length;
-      return '<div style="border-top:2px solid var(--ink);padding:10px 4px;display:flex;flex-direction:column;gap:2px"><span class="j" style="font-weight:600">' + money(r.total, r.cur) + '</span><span class="j mute" style="font-size:11px">≈ ' + (r.cur === 'USD' ? money(toEur(r.total, 'USD'), 'EUR') : money(toUsd(r.total, 'EUR'), 'USD')) + '</span><span style="font-size:12px">' + esc(L2(['copertura', 'coverage'])) + ' ' + cov + '/' + r.lines.length + ((r.charges || []).some(function (c) { return c.amount; }) ? ' · ' + esc(L2(['spese incluse', 'charges incl.'])) : '') + '</span>' + (r.offer ? '<span class="mute" style="font-size:11px">' + esc(L2(['valida fino al', 'valid until'])) + ' ' + fd(r.offer.validTo) + '</span>' : '') + '</div>';
+      return '<div style="border-top:2px solid var(--ink);padding:10px 4px;display:flex;flex-direction:column;gap:2px"><span class="j" style="font-weight:600">' + money(r.total, r.cur) + '</span><span class="j mute" style="font-size:11px">≈ ' + (r.cur === 'USD' ? money(toEur(r.total, 'USD'), 'EUR') : money(toUsd(r.total, 'EUR'), 'USD')) + '</span><span style="font-size:12px">' + esc(L2(['copertura', 'coverage'])) + ' ' + cov + '/' + r.lines.length + ((r.charges || []).some(function (c) { return c.amount; }) ? ' · ' + esc(L2(['spese incluse', 'charges incl.'])) : '') + '</span>' + (r.offer ? '<span class="mute" style="font-size:11px">' + esc(L2(['valida fino al', 'valid until'])) + ' ' + fd(r.offer.validTo) + '</span>' : '') + lf + '</div>';
     }).join('');
-    var sum = {}, totE = 0;
+    var sum = {}, totE = 0, totL = 0;
     Object.keys(award).forEach(function (row) {
       var r = byId(award[row]); if (!r) return; var x = rfqLine(r, +row); if (!x) return;
-      var e = offerEur(r, x); totE += e; (sum[r.id] = sum[r.id] || { n: 0, e: 0, r: r }).n++; sum[r.id].e += e;
+      var e = offerEur(r, x); totE += e; if (feat('landed')) totL += e * ((landed(r) || { f: 1 }).f); (sum[r.id] = sum[r.id] || { n: 0, e: 0, r: r }).n++; sum[r.id].e += e;
     });
     var aw = Object.keys(sum).map(function (k) { return '<span>' + esc(supName(sum[k].r.sup)) + ' · ' + sum[k].n + ' ' + esc(L2(['righe', 'rows'])) + ' · <span class="j">' + money(sum[k].e, 'EUR') + '</span></span>'; }).join('');
     return '<section class="card stack" id="cmp"><div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px"><h2>' + esc(L2(['Comparazione offerte', 'Quotation comparison'])) + ' <span class="j mute">' + quoted.length + '/' + rfqs.length + '</span></h2>' +
-      '<div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="preset" data-k="price">' + esc(L2(['Miglior prezzo', 'Best price'])) + '</button><button type="button" class="btn sm" data-act="preset" data-k="genuine">' + esc(L2(['Miglior prezzo Genuine', 'Best Genuine price'])) + '</button><button type="button" class="btn sm" data-act="preset" data-k="fast">' + esc(L2(['Consegna più rapida', 'Fastest delivery'])) + '</button><button type="button" class="btn sm ghost" data-act="preset" data-k="none">' + esc(L2(['Azzera', 'Clear'])) + '</button></div></div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="preset" data-k="price">' + esc(L2(['Miglior prezzo', 'Best price'])) + '</button><button type="button" class="btn sm" data-act="preset" data-k="genuine">' + esc(L2(['Miglior prezzo Genuine', 'Best Genuine price'])) + '</button><button type="button" class="btn sm" data-act="preset" data-k="fast">' + esc(L2(['Consegna più rapida', 'Fastest delivery'])) + '</button>' + (feat('landed') ? '<button type="button" class="btn sm" data-act="preset" data-k="landed">' + esc(L2(['Miglior costo a bordo', 'Best landed cost'])) + '</button>' : '') + '<button type="button" class="btn sm ghost" data-act="preset" data-k="none">' + esc(L2(['Azzera', 'Clear'])) + '</button></div></div>' +
       '<div style="overflow-x:auto"><div class="cmp" style="min-width:' + (180 + cols * 165) + 'px;grid-template-columns:minmax(170px,1.1fr) repeat(' + cols + ',minmax(160px,1fr))">' + head + body + foot + '</div></div>' +
-      (totE ? '<div class="note" style="display:flex;flex-wrap:wrap;gap:6px 22px;color:var(--ink)"><b>' + esc(L2(['Scelta', 'Selection'])) + '</b>' + aw + '<b class="j">' + money(totE, 'EUR') + ' · ' + money(totE * fx(), 'USD') + '</b></div>' : '<div class="mute" style="font-size:12px">' + esc(L2(['Clicca un\'offerta per sceglierla riga per riga, oppure usa una proposta automatica.', 'Click an offer to pick it row by row, or use an automatic proposal.'])) + '</div>') + '</section>';
+      (totE ? '<div class="note" style="display:flex;flex-wrap:wrap;gap:6px 22px;color:var(--ink)"><b>' + esc(L2(['Scelta', 'Selection'])) + '</b>' + aw + '<b class="j">' + money(totE, 'EUR') + ' · ' + money(totE * fx(), 'USD') + '</b>' + (totL ? '<span class="j" style="color:var(--accText)">' + esc(L2(['a bordo stimato ', 'landed estimate '])) + money(totL, 'EUR') + '</span>' : '') + '</div>' : '<div class="mute" style="font-size:12px">' + esc(L2(['Clicca un\'offerta per sceglierla riga per riga, oppure usa una proposta automatica.', 'Click an offer to pick it row by row, or use an automatic proposal.'])) + '</div>') + '</section>';
   }
   function preset(rq, k) {
     var rfqs = children(rq.id).filter(function (x) { return x.type === 'RFQ' && x.status === 'quotata' && x.lines; });
@@ -1044,7 +1034,7 @@
       rfqs.forEach(function (r) {
         var x = rfqLine(r, l.row); if (!x || !x.quoted) return;
         if (k === 'genuine' && x.cond !== 'Genuine') return;
-        var v = k === 'fast' ? (x.days == null ? 999 : x.days) * 1e6 + offerEur(r, x) : offerEur(r, x);
+        var v = k === 'fast' ? (x.days == null ? 999 : x.days) * 1e6 + offerEur(r, x) : k === 'landed' ? offerEur(r, x) * ((landed(r) || { f: 1 }).f) : offerEur(r, x);
         if (bestV == null || v < bestV) { bestV = v; bestR = r; }
       });
       if (bestR) rq.award[l.row] = bestR.id;
@@ -1194,6 +1184,7 @@
               charges: (r.charges || []).map(function (c) { return { kind: c.kind, amount: c.amount }; }), offerRef: r.offer && r.offer.ref, terms: 'Material delivery within ' + Math.max.apply(null, lines.map(function (l) { return l.days || 0; })) + ' days from PO date', mdsdoc: true,
               due: lines.reduce(function (m, l) { return l.due && l.due > m ? l.due : m; }, '') || rq.due }, r.num);
             po.total = docTotal(po); made.push(po);
+            if (feat('approv')) autoApprove(po);
             r.awarded = true;
           });
           setStatus(rq, 'ordinata', made.map(function (p) { return p.num; }).join(', '));
@@ -1214,10 +1205,10 @@
         '<div class="kv"><dt>' + esc(t('c_sup')) + '</dt><dd>' + esc(supName(po.sup)) + '</dd><dt>' + esc(t('c_total')) + '</dt><dd class="j">' + money(po.total, po.cur) + ' · ≈ ' + money(poE, 'EUR') + '</dd></div>' +
         '<label>' + esc(L2(['Conto di budget', 'Budget account'])) + '<select name="acc">' + acctOptions(po.ship, def) + '</select></label><div id="impact" class="note" style="color:var(--ink)">' + impact(def) + '</div>' +
         '<label>' + esc(t('note')) + '<textarea name="note" rows="2"></textarea></label>' +
-        '<div class="mute" style="font-size:12px">' + esc(L2(['Approva chiunque: resta traccia di data e nota nella cronologia.', 'Anyone can approve: date and note stay in the history.'])) + '</div>',
-        function (f) { po.account = f.elements.acc.value; setStatus(po, 'approvato', po.account + (f.elements.note.value ? ' · ' + f.elements.note.value : '')); save(); render(); toast(L2(['Ordine approvato', 'Order approved'])); },
-        { w: 620, ok: L2(['Approva', 'Approve']), onInput: function (e, f) { if (e.target.name === 'acc') f.querySelector('#impact').innerHTML = impact(e.target.value); } });
-      var sel = document.querySelector('.modal select[name=acc]'); if (sel) sel.addEventListener('change', function () { document.getElementById('impact').innerHTML = impact(sel.value); });
+        (feat('approv') ? apprBox(po, def) : '<div class="mute" style="font-size:12px">' + esc(L2(['Approva chiunque: resta traccia di data e nota nella cronologia.', 'Anyone can approve: date and note stay in the history.'])) + '</div>'),
+        function (f) { po.account = f.elements.acc.value; setStatus(po, 'approvato', (feat('approv') ? L2(['Approvato da ', 'Approved by ']) + apprRule(po, po.account).who + ' · ' : '') + po.account + (f.elements.note.value ? ' · ' + f.elements.note.value : '')); save(); render(); toast(L2(['Ordine approvato', 'Order approved'])); },
+        { w: 620, ok: L2(['Approva', 'Approve']), onInput: function (e, f) { if (e.target.name === 'acc') { f.querySelector('#impact').innerHTML = impact(e.target.value); var rb = f.querySelector('#rule'); if (rb) rb.outerHTML = apprBox(po, e.target.value); } } });
+      var sel = document.querySelector('.modal select[name=acc]'); if (sel) sel.addEventListener('change', function () { document.getElementById('impact').innerHTML = impact(sel.value); var rb = document.getElementById('rule'); if (rb) rb.outerHTML = apprBox(po, sel.value); });
     },
     dn: function (po) {
       var res = poResidual(po);
@@ -1579,7 +1570,7 @@
     var sh = shipBy(d.ship), rq = d.from && byId(d.from[0]), sp = supById(d.sup) || {};
     var subj = 'M/V ' + sh.name + ' · ' + (d.type === 'RFQ' ? 'RFQ ' : 'PURCHASE ORDER ') + d.num + (d.rev ? ' REV. ' + d.rev : '') + (rq && d.type === 'RFQ' ? ' · ' + rq.num : '') + ' · ' + (sp.name || '');
     var body = d.type === 'RFQ'
-      ? 'Dear Sirs,\n\nPlease find attached our Request for Quotation ' + d.num + ' for M/V ' + sh.name + '.\nKindly revert by ' + fd(d.limit) + ' with your best offer, stating price, availability, delivery time, place of origin / stock and condition (Genuine, Non genuine or Reconditioned) for each item.\n\nThis inquiry is a request for quotation only and is NOT a purchase order. Kindly quote our RFQ number in all correspondence.\n\nBest regards'
+      ? 'Dear Sirs,\n\nPlease find attached our Request for Quotation ' + d.num + ' for M/V ' + sh.name + '.\nKindly revert by ' + fd(d.limit) + ' with your best offer, stating price, availability, delivery time, place of origin / stock and condition (Genuine, Non genuine or Reconditioned) for each item.' + (feat('link') ? '\nYou can also enter your quotation online at:\n' + supLink(d) : '') + '\n\nThis inquiry is a request for quotation only and is NOT a purchase order. Kindly quote our RFQ number in all correspondence.\n\nBest regards'
       : 'Dear Sirs,\n\nPlease find attached our Purchase Order ' + d.num + (d.rev ? ' Rev. ' + d.rev + ', which supersedes the previous version' : '') + ' for M/V ' + sh.name + (d.offerRef ? ', as per your quotation ' + d.offerRef : '') + '.\nKindly confirm acceptance, delivery date and dispatch details by return.\n\nBest regards';
     var name = pdfName(d);
     formModal(L2(['Email al fornitore', 'Email to supplier']) + ' · ' + d.num,
@@ -1846,7 +1837,7 @@
       (list.length ? '<div class="tablebox"><table class="grid"><thead><tr><th>' + esc(L2(['Documento', 'Document'])) + '</th><th>' + esc(L2(['Tipo', 'Type'])) + '</th><th>Maker / ' + esc(L2(['modello', 'model'])) + '</th><th>' + esc(L2(['Equipaggiamento', 'Equipment'])) + '</th><th>' + esc(L2(['Riferimenti', 'References'])) + '</th><th>' + esc(L2(['Articoli collegati', 'Linked items'])) + '</th><th></th></tr></thead><tbody>' +
         list.map(function (td) {
           var n = (DB.items || []).filter(function (it) { return docsForItem(it).indexOf(td) >= 0; }).length;
-          return '<tr><td><b>' + esc(td.title) + '</b>' + (td.file && td.file.size ? '<div class="mute" style="font-size:11px">' + esc(td.file.name || '') + ' · ' + kb(td.file.size) + '</div>' : '') + '</td><td>' + esc(td.kind) + '</td><td>' + esc([td.maker, td.model].filter(Boolean).join(' ')) + '</td><td>' + esc(td.equipment || '') + (td.ships ? '<div class="mute" style="font-size:11px">' + esc(td.ships.join(', ')) + '</div>' : '') + '</td><td class="j" style="font-size:12px">' + esc((td.refs || []).join(', ')) + '</td><td class="num j">' + n + '</td><td>' + (td.file ? '<button class="btn sm" data-act="opentd" data-id="' + td.id + '">' + esc(L2(['Apri', 'Open'])) + '</button>' : '<span class="mute" style="font-size:12px">' + esc(L2(['file non incluso', 'file not included'])) + '</span>') + '</td></tr>';
+          return '<tr><td><b>' + esc(td.title) + '</b>' + (td.file && td.file.size ? '<div class="mute" style="font-size:11px">' + esc(td.file.name || '') + ' · ' + kb(td.file.size) + '</div>' : '') + '</td><td>' + esc(td.kind) + '</td><td>' + esc([td.maker, td.model].filter(Boolean).join(' ')) + '</td><td>' + esc(td.equipment || '') + (td.ships ? '<div class="mute" style="font-size:11px">' + esc(td.ships.join(', ')) + '</div>' : '') + '</td><td class="j" style="font-size:12px">' + esc((td.refs || []).join(', ')) + '</td><td class="num j">' + n + '</td><td style="white-space:nowrap">' + (td.file ? '<button class="btn sm" data-act="opentd" data-id="' + td.id + '">' + esc(L2(['Apri', 'Open'])) + '</button>' : '<span class="mute" style="font-size:12px">' + esc(L2(['file non incluso', 'file not included'])) + '</span>') + (feat('catalog') && td.parts && td.parts.length ? ' <button class="btn sm pri" data-act="tdparts" data-id="' + td.id + '">' + td.parts.length + ' ' + esc(L2(['ricambi', 'parts'])) + '</button>' : '') + '</td></tr>';
         }).join('') + '</tbody></table></div>' : '<div class="empty">' + esc(t('noResults')) + '</div>') +
       '<div class="note">' + esc(L2(['Un documento si collega agli articoli il cui part number inizia con uno dei riferimenti (es. 50801-07H) o con lo stesso modello. Nel prototipo i file caricati restano in questo browser; nella versione definitiva staranno su server o SharePoint.', 'A document links to items whose part number starts with one of its references (e.g. 50801-07H) or with the same model. In the prototype uploaded files stay in this browser.'])) + '</div>';
     return shell('documenti', crumb([[t('fleet'), '#/']]), L2(['Documentazione tecnica', 'Technical documentation']), body);
@@ -1939,10 +1930,12 @@
     }).join('');
     var ev = (tr.events || []).slice().reverse().slice(0, 6).map(function (e) { return '<div><span class="j">' + fd(e.at) + '</span><span>' + esc(e.txt) + (e.loc ? ' · ' + esc(e.loc) : '') + (e.note ? ' · ' + esc(e.note) : '') + '</span></div>'; }).join('');
     return '<section class="card stack"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2>' + esc(L2(['Dov\'è la merce', 'Where are the goods'])) + '</h2><button class="btn sm" data-act="legadd">' + esc(L2(['Aggiungi tratta e tracking', 'Add leg and tracking'])) + '</button></div>' +
+      (feat('sped') && d.type === 'DN' && shpOf(d.id) ? '<div class="note" style="color:var(--ink)">' + esc(L2(['Viaggia nella spedizione consolidata ', 'Travels in consolidated shipment '])) + '<a href="#/spedizione/' + shpOf(d.id).id + '">' + esc(shpOf(d.id).num) + '</a>' + esc(L2([': tappe e tracking si aggiornano lì.', ': stages and tracking are updated there.'])) + '</div>' : '') +
       '<div style="display:flex;gap:6px;flex-wrap:wrap">' + steps + '</div>' + (ev ? '<div class="log">' + ev + '</div>' : '') + legs + '</section>';
   }
   CLICK.stage = function (a) {
-    var d = curDoc(); if (!d) return; var k = a.getAttribute('data-k');
+    var d = curT(); if (!d) return; var k = a.getAttribute('data-k');
+    if (d.dns && k === 'a_bordo') { d.status = 'consegnata'; d.track = d.track || { legs: [], events: [] }; d.track.stage = k; d.track.events = d.track.events || []; d.track.events.push({ at: TODAY, txt: L2(STAGES[stageIdx(k)][1]), loc: '' }); d.log.push({ at: TODAY, to: 'consegnata', txt: L2(['Consegnata a bordo: ora ogni DN va confermata dalla nave', 'Delivered on board: each DN must now be confirmed by the vessel']) }); save(); render(); return; }
     if (k === 'a_bordo') { if (P.seat !== 'ship') { toast(L2(['La conferma a bordo spetta alla nave: passa alla postazione Bordo.', 'On-board confirmation is done by the vessel: switch to Vessel station.'])); return; } receiveModal(d); return; }
     formModal(L2(['Aggiorna posizione merce', 'Update goods position']) + ' · ' + L2(STAGES[stageIdx(k)][1]),
       '<div class="filters"><label>' + esc(t('c_date')) + '<input type="date" name="at" value="' + TODAY + '"></label><label>' + esc(L2(['Luogo', 'Place'])) + '<input name="loc"></label></div><label>' + esc(t('note')) + '<input name="note"></label>',
@@ -1950,18 +1943,19 @@
         d.track = d.track || { legs: [], events: [] }; d.track.events = d.track.events || [];
         d.log = d.log || []; d.track.stage = k; d.track.events.push({ at: f.elements.at.value || TODAY, txt: L2(STAGES[stageIdx(k)][1]), loc: f.elements.loc.value.trim(), note: f.elements.note.value.trim() });
         var to = STAGES[stageIdx(k)][2];
+        if (d.dns) { d.log.push({ at: TODAY, to: d.status, txt: L2(STAGES[stageIdx(k)][1]) + (f.elements.loc.value ? ' · ' + f.elements.loc.value : '') }); d.dns.forEach(function (id) { var x = byId(id); if (!x || x.status === 'ricevuta') return; x.track = x.track || { legs: [], events: [] }; x.track.stage = k; if (to !== x.status) setStatus(x, to, L2(STAGES[stageIdx(k)][1]) + ' · ' + d.num); }); save(); render(); return; }
         if (to !== d.status && d.status !== 'ricevuta') setStatus(d, to, L2(STAGES[stageIdx(k)][1]) + (f.elements.loc.value ? ' · ' + f.elements.loc.value : ''));
         else d.log.push({ at: TODAY, to: d.status, txt: L2(STAGES[stageIdx(k)][1]) + (f.elements.loc.value ? ' · ' + f.elements.loc.value : '') });
         save(); render();
       }, { ok: L2(['Aggiorna', 'Update']) });
   };
   CLICK.legadd = function () {
-    var d = curDoc(); if (!d) return;
+    var d = curT(); if (!d) return;
     formModal(L2(['Nuova tratta', 'New leg']),
       '<div class="filters"><label>' + esc(L2(['Tratta', 'Leg'])) + '<select name="leg"><option>' + esc(L2(['Fornitore → hub', 'Supplier → hub'])) + '</option><option>' + esc(L2(['Hub → porto / agente', 'Hub → port / agent'])) + '</option><option>' + esc(L2(['Agente → bordo', 'Agent → vessel'])) + '</option><option>' + esc(L2(['Fornitore → bordo', 'Supplier → vessel'])) + '</option></select></label>' +
       '<label>' + esc(L2(['Vettore', 'Carrier'])) + '<select name="carrier">' + Object.keys(CARRIERS).concat((DB.settings && DB.settings.forwarders) || []).map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('') + '</select></label></div>' +
       '<label>' + esc(L2(['Numero di tracking / AWB / B/L', 'Tracking / AWB / B/L number'])) + '<input name="num"></label>' +
-      '<div class="filters"><label>' + esc(L2(['Da', 'From'])) + '<input name="from" value="' + esc(supName(d.sup)) + '"></label><label>' + esc(L2(['A', 'To'])) + '<input name="to" value="' + esc(d.hub || '') + '"></label></div>',
+      '<div class="filters"><label>' + esc(L2(['Da', 'From'])) + '<input name="from" value="' + esc(d.dns ? d.hub || '' : supName(d.sup)) + '"></label><label>' + esc(L2(['A', 'To'])) + '<input name="to" value="' + esc(d.dns ? d.port || 'M/V ' + shipBy(d.ship).name : d.hub || '') + '"></label></div>',
       function (f) {
         d.track = d.track || { legs: [], events: [] }; d.track.legs = d.track.legs || [];
         d.log = d.log || []; d.track.legs.push({ leg: f.elements.leg.value, carrier: f.elements.carrier.value, num: f.elements.num.value.trim(), from: f.elements.from.value.trim(), to: f.elements.to.value.trim(), events: [] });
@@ -1970,7 +1964,7 @@
       }, { ok: L2(['Aggiungi', 'Add']) });
   };
   CLICK.trpaste = function (a) {
-    var d = curDoc(); if (!d) return; var g = d.track.legs[+a.getAttribute('data-i')];
+    var d = curT(); if (!d) return; var g = d.track.legs[+a.getAttribute('data-i')];
     formModal(L2(['Incolla dati di tracking', 'Paste tracking data']) + ' · ' + g.carrier + ' ' + g.num,
       '<div class="mute" style="font-size:13px">' + esc(L2(['Su 17TRACK o sul sito del vettore seleziona la cronologia degli eventi, copia e incolla qui. Il prototipo riconosce date e ore e ricostruisce la timeline.', 'On 17TRACK or the carrier site select the event history, copy and paste here. Dates and times are recognised to rebuild the timeline.'])) + '</div><textarea name="txt" rows="12" class="j" style="font-size:12px"></textarea>',
       function (f) {
@@ -1981,7 +1975,7 @@
         save(); render(); toast(ev.length + ' ' + L2(['eventi importati', 'events imported']));
       }, { w: 720, ok: L2(['Aggiorna timeline', 'Update timeline']) });
   };
-  CLICK.legtoggle = function (a) { var d = curDoc(); var k = d.id + a.getAttribute('data-i'); UI.legOpen = UI.legOpen === k ? null : k; render(); };
+  CLICK.legtoggle = function (a) { var d = curT(); var k = d.id + a.getAttribute('data-i'); UI.legOpen = UI.legOpen === k ? null : k; render(); };
   function pageLogistics(q) {
     var nave = q.nave || '';
     var cols = [
@@ -1991,7 +1985,9 @@
       ['board', ['A bordo (ultimi 30 gg)', 'On board (last 30 days)'], ['a_bordo']]
     ];
     var from30 = addDays(TODAY, -30);
-    var dns = docs(function (d) { return d.type === 'DN' && (!nave || d.ship === nave) && (isOpen(d) || (d.status === 'ricevuta' && (lastLogDate(d) || d.date) >= from30)); });
+    var dns = docs(function (d) { return d.type === 'DN' && (!nave || d.ship === nave) && !d.stale && !(feat('sped') && shpOf(d.id)) && (isOpen(d) || (d.status === 'ricevuta' && (lastLogDate(d) || d.date) >= from30)); });
+    var shs = feat('sped') ? shipments().filter(function (x) { return (!nave || x.ship === nave) && (x.status !== 'consegnata' || (lastLogDate(x) || '') >= from30); }) : [];
+    function shpCard(x) { var g = (x.track.legs || []).slice(-1)[0]; return '<a href="#/spedizione/' + x.id + '" class="card stack" style="padding:10px 12px;gap:4px;text-decoration:none;color:var(--ink);border-left:4px solid var(--acc)"><div style="display:flex;justify-content:space-between;gap:6px"><span class="j" style="font-size:12px;color:var(--teal);font-weight:600">' + esc(x.num) + '</span><span class="code j">' + x.ship + '</span></div><b style="font-size:13px">' + esc(L2(['Spedizione consolidata · ', 'Consolidated shipment · '])) + x.dns.length + ' DN</b><span class="mute" style="font-size:12px">' + esc([x.hub, x.port].filter(Boolean).join(' → ')) + '</span><span style="font-size:12px">' + esc(L2(STAGES[stageIdx(stageOf(x))][1])) + '</span>' + (g ? '<span class="j" style="font-size:11px">' + esc(g.carrier + ' ' + (g.num || '')) + '</span>' : '') + (x.due ? '<span class="j mute" style="font-size:11px">ETA ' + fd(x.due) + '</span>' : '') + '</a>'; }
     var waiting = docs(function (d) { return d.type === 'PO' && (!nave || d.ship === nave) && { inviato: 1, confermato: 1, finalizzato: 1 }[d.status] && !children(d.id).some(function (x) { return x.type === 'DN'; }); });
     function card(d) {
       var st = stageOf(d), legs = (d.track && d.track.legs) || [], g = legs[legs.length - 1];
@@ -2007,17 +2003,488 @@
       }).join('') + (waiting.length > 12 ? '<a class="btn sm" href="#/docs' + qs({ tipo: 'PO', nave: nave, aperti: 1 }) + '">' + esc(L2(['Altri ', 'Other '])) + (waiting.length - 12) + ' →</a>' : '') + '</div>' +
       cols.map(function (c) {
         var ds = dns.filter(function (d) { return c[2].indexOf(stageOf(d)) >= 0; }).sort(function (a, b) { return (a.due || '') < (b.due || '') ? -1 : 1; });
-        return '<div class="stack"><h3 style="margin:0;font-size:14px">' + esc(L2(c[1])) + ' <span class="j mute">' + ds.length + '</span></h3>' + ds.slice(0, 12).map(card).join('') + (ds.length > 12 ? '<a class="btn sm" href="#/docs' + qs({ tipo: 'DN', nave: nave, aperti: 1 }) + '">' + esc(L2(['Altre ', 'Other '])) + (ds.length - 12) + ' →</a>' : '') + '</div>';
+        var sx = shs.filter(function (x) { return c[2].indexOf(stageOf(x)) >= 0; });
+        return '<div class="stack"><h3 style="margin:0;font-size:14px">' + esc(L2(c[1])) + ' <span class="j mute">' + (ds.length + sx.length) + '</span></h3>' + sx.map(shpCard).join('') + ds.slice(0, 12).map(card).join('') + (ds.length > 12 ? '<a class="btn sm" href="#/docs' + qs({ tipo: 'DN', nave: nave, aperti: 1 }) + '">' + esc(L2(['Altre ', 'Other '])) + (ds.length - 12) + ' →</a>' : '') + '</div>';
       }).join('') + '</div></div>';
     return shell('logistica', crumb([[t('fleet'), '#/']]), L2(['Logistica', 'Logistics']) + (nave ? ' · ' + nave : ''),
-      '<div class="filters"><select data-filter="nave" aria-label="' + esc(t('c_ship')) + '"><option value="">' + esc(t('allShips')) + '</option>' + shipOpts + '</select><span class="mute" style="font-size:12px">' + esc(L2(['Ordini inviati senza consegna aperta, poi ogni consegna per tappa. Clic per aprire.', 'Sent orders with no delivery yet, then each delivery by stage. Click to open.'])) + '</span></div>' + board);
+      '<div class="filters"><select data-filter="nave" aria-label="' + esc(t('c_ship')) + '"><option value="">' + esc(t('allShips')) + '</option>' + shipOpts + '</select><span class="mute" style="font-size:12px;flex:1">' + esc(L2(['Ordini inviati senza consegna aperta, poi ogni consegna per tappa. Clic per aprire.', 'Sent orders with no delivery yet, then each delivery by stage. Click to open.'])) + '</span>' + (feat('sped') ? '<button class="btn pri sm" data-act="shpnew">' + esc(L2(['Nuova spedizione consolidata', 'New consolidated shipment'])) + '</button>' : '') + '</div>' + board);
   }
   function lastLogDate(d) { var l = d.log || []; return l.length ? l[l.length - 1].at : null; }
+
+
+  /* =====================================================================
+     PROPOSTE (20-10-2026): ogni proposta ha un interruttore in #/proposte
+     ===================================================================== */
+  var FLAGS = [
+    ['oggi', ['Coda "Oggi" come pagina iniziale', 'Today queue as home page'], ['La giornata parte da ciò che è fermo e chiede una decisione, per tutta la flotta. Ogni voce ha l\'azione a un clic e "Rimanda". La Flotta resta nel menu.', 'The day starts from what is blocked and needs a decision.'], ['Oggi: la pagina iniziale è la Flotta con i KPI per nave.', 'Today: home is the Fleet with KPIs per vessel.'], '#/'],
+    ['menu', ['Menu raggruppato', 'Grouped menu'], ['Voci del menu divise per area (Acquisti, Bordo, Controllo). Lo Scadenzario confluisce in "Oggi".', 'Menu items grouped by area.'], ['Oggi: 13 voci in fila.', 'Today: 13 items in a row.'], '#/'],
+    ['approv', ['Approvazione a regole', 'Rule-based approval'], ['Sotto una soglia e dentro il budget del conto l\'ordine si approva da solo; sopra serve una persona con nome; fuori budget l\'armatore.', 'Below a threshold and within budget the order approves itself; above, a named person.'], ['Oggi: approva chiunque.', 'Today: anyone approves.'], '#/docs?tipo=PO&stato=bozza'],
+    ['landed', ['Costo arrivato a bordo', 'Landed cost on board'], ['In comparazione, accanto al prezzo, il costo stimato a bordo: trasporto per zona di origine, hub, dogana extra-UE, oppure il rapporto storico delle fatture di quel fornitore. Nuova proposta "Miglior costo a bordo".', 'In the comparison, the estimated landed cost next to the price.'], ['Oggi: si confronta il prezzo; le spese extra si scoprono in fattura.', 'Today: price only; extras show up on the invoice.'], '#/doc/DEMO-RQ'],
+    ['score', ['Scheda fornitore automatica', 'Automatic supplier scorecard'], ['Voto A/B/C calcolato dai documenti: risposta alle RFQ, puntualità degli ordini, lead time promesso. Compare in comparazione e nella pagina del fornitore.', 'A/B/C grade computed from documents.'], ['Oggi: valutazione a memoria.', 'Today: from memory.'], '#/fornitori'],
+    ['link', ['Link offerta per il fornitore', 'Supplier quotation link'], ['Ogni RFQ ha un link: il fornitore compila prezzi, LT, condizione, origine e Incoterm in una pagina web; l\'offerta entra da sola in comparazione.', 'Each RFQ has a link; the supplier fills in the offer online.'], ['Oggi: l\'offerta arriva in PDF e si ribatte a mano.', 'Today: offer arrives as PDF and is retyped.'], '#/doc/HQS000000007694'],
+    ['qr', ['Ricevimento a bordo con QR', 'On-board receipt with QR'], ['Etichetta con QR per ogni consegna. A bordo si inquadra col telefono, si contano i pezzi, si fotografa la DN firmata. Le DN scadute senza conferma finiscono nei solleciti.', 'QR label per delivery; the ship scans, counts and photographs the signed DN.'], ['Oggi: conferma dalla postazione Bordo; 87 consegne su 92 mai confermate.', 'Today: confirmation from the Vessel station; 87 of 92 never confirmed.'], '#/doc/HQS000000007512'],
+    ['sped', ['Spedizioni consolidate', 'Consolidated shipments'], ['Più consegne (DN) viaggiano insieme hub → nave in una Spedizione con un solo tracking. I costi di trasporto si ripartiscono sulle DN e vanno a budget (Logistic and packing).', 'Several DNs travel together hub → vessel with one tracking; freight costs are split and booked.'], ['Oggi: tracking e tappe su ogni singola DN.', 'Today: tracking on each DN.'], '#/logistica'],
+    ['catalog', ['Catalogo dalle tavole', 'Catalogue from parts plates'], ['Le tavole dei costruttori diventano elenchi ricambi con P/N da confermare. Sulle righe senza codice la richiesta propone l\'articolo a catalogo più simile.', 'Maker plates become parts lists; generic lines get a catalogue suggestion.'], ['Oggi: un terzo delle righe con codice generico GI0001.', 'Today: a third of lines with generic code GI0001.'], '#/documenti']
+  ];
+  function feat(k) { return !P.flags || P.flags[k] !== false; }
+  function setts(path, def) { var o = DB.settings || {}, p = path.split('.'); for (var i = 0; i < p.length; i++) { if (o == null) return def; o = o[p[i]]; } return o == null ? def : o; }
+  function aset(path, v) { DB.settings = DB.settings || {}; var o = DB.settings, p = path.split('.'); for (var i = 0; i < p.length - 1; i++) o = o[p[i]] = o[p[i]] || {}; o[p[p.length - 1]] = v; save(); }
+  CLICK.flag = function (a) { P.flags = P.flags || {}; P.flags[a.getAttribute('data-k')] = a.checked; savePrefs(); render(); };
+  CLICK.flagsall = function (a) { P.flags = {}; var v = a.getAttribute('data-v') === '1'; FLAGS.forEach(function (f) { P.flags[f[0]] = v; }); savePrefs(); render(); toast(v ? L2(['Tutte le proposte accese', 'All proposals on']) : L2(['Versione attuale: proposte spente', 'Current version: proposals off'])); };
+  function pageProposals() {
+    var cards = FLAGS.map(function (f) {
+      var o = feat(f[0]);
+      return '<section class="card stack" style="gap:8px;' + (o ? 'border-color:var(--accLine)' : '') + '"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">' +
+        '<h2 style="margin:0">' + esc(L2(f[1])) + '</h2><label class="tog" style="white-space:nowrap"><input type="checkbox" data-act="flag" data-k="' + f[0] + '"' + (o ? ' checked' : '') + '> ' + esc(o ? L2(['Accesa', 'On']) : L2(['Spenta', 'Off'])) + '</label></div>' +
+        '<div style="font-size:13px;line-height:1.5">' + esc(L2(f[2])) + '</div><div class="mute" style="font-size:12px">' + esc(L2(f[3])) + '</div>' +
+        '<a class="btn sm" style="align-self:flex-start" href="' + f[4] + '">' + esc(L2(['Guardala', 'See it'])) + ' →</a></section>';
+    }).join('');
+    var A = setts('approval', {}), Lc = setts('landed', {});
+    var num = function (path, v, w) { return '<input class="j" data-aset="' + path + '" value="' + nf(v, v % 1 ? 1 : 0) + '" inputmode="decimal" style="width:' + (w || 90) + 'px;text-align:right">'; };
+    var params = '<section class="card stack"><h2>' + esc(L2(['Parametri delle proposte', 'Proposal parameters'])) + '</h2>' +
+      '<div class="filters"><label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">' + esc(L2(['Approvazione automatica fino a (€)', 'Auto approval up to (€)'])) + num('approval.auto', A.auto) + '</label>' +
+      '<label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">' + esc(L2(['Approvatore', 'Approver'])) + '<input data-asett="approval.mgr" value="' + esc(A.mgr || '') + '" style="width:180px"></label>' +
+      '<label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">' + esc(L2(['fino a (€)', 'up to (€)'])) + num('approval.mgrMax', A.mgrMax) + '</label>' +
+      '<label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">' + esc(L2(['Oltre o fuori budget', 'Above or off budget'])) + '<input data-asett="approval.top" value="' + esc(A.top || '') + '" style="width:160px"></label></div>' +
+      '<div class="filters">' + ['EU', 'EXTRA', 'ASIA'].map(function (z) { return '<label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">' + esc(L2(['Trasporto ', 'Freight ']) + z + ' %') + num('landed.' + z + '.pct', (Lc[z] || {}).pct, 60) + '</label><label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">' + esc(L2(['minimo €', 'min €'])) + num('landed.' + z + '.min', (Lc[z] || {}).min, 70) + '</label>'; }).join('') +
+      '<label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">' + esc(L2(['Hub / handling €', 'Hub / handling €'])) + num('landed.hub', Lc.hub, 70) + '</label><label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">' + esc(L2(['Dogana extra-UE %', 'Non-EU customs %'])) + num('landed.customs', Lc.customs, 60) + '</label></div>' +
+      '<div class="mute" style="font-size:12px">' + esc(L2(['Valori di prova da tarare con le vostre fatture. Se un fornitore ha già fatture con spese, il costo a bordo usa il suo rapporto storico.', 'Test values to calibrate with your invoices.'])) + '</div></section>';
+    var body = '<div class="note" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:var(--ink)"><span style="flex:1;min-width:240px">' + esc(L2(['Ogni proposta si accende e si spegne qui, solo su questo computer. Spente tutte, l\'app torna esattamente come prima.', 'Each proposal is switched here, on this computer only. All off = previous version.'])) + '</span>' +
+      '<button class="btn" data-act="flagsall" data-v="0">' + esc(L2(['Versione attuale (tutte spente)', 'Current version (all off)'])) + '</button><button class="btn pri" data-act="flagsall" data-v="1">' + esc(L2(['Tutte accese', 'All on'])) + '</button></div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px">' + cards + '</div>' + params;
+    return shell('proposte', crumb([[t('fleet'), '#/']]), L2(['Proposte', 'Proposals']), body);
+  }
+
+  /* ---------- rail (normale o raggruppato) ---------- */
+  function railHtml(active, ship) {
+    var home = feat('oggi');
+    var E = {
+      oggi: ['#/', 'cal', L2(['Oggi', 'Today']), active === 'oggi'],
+      flotta: [home ? '#/flotta' : '#/', 'fleet', t('fleet'), active === 'home' || active === 'ship'],
+      acq: ['#/docs' + qs({ tipo: 'RQ', nave: ship }), 'cart', t('purchasing'), active === 'docs' || active === 'doc'],
+      pms: ['#/modulo/pms', 'gear', t('pms'), active === 'pms'],
+      log: ['#/logistica' + qs({ nave: ship }), 'cal', L2(['Logistica', 'Logistics']), active === 'logistica'],
+      mag: ['#/magazzino' + qs({ nave: ship || 'PEP' }), 'box', t('stores'), active === 'magazzino'],
+      doc: ['#/documenti', 'doc', L2(['Documenti', 'Documents']), active === 'documenti'],
+      cert: ['#/modulo/certificati', 'doc', t('certs'), active === 'certificati'],
+      due: ['#/scadenze' + qs({ nave: ship }), 'cal', t('due'), active === 'scadenze'],
+      bud: ['#/budget' + qs({ nave: ship || 'PEP' }), 'chart', t('budget'), active === 'budget'],
+      sup: ['#/fornitori', 'ppl', t('suppliers'), active === 'fornitori'],
+      acc: ['#/contabilita', 'doc', L2(['Contabilità', 'Accounting']), active === 'contabilita'],
+      prop: ['#/proposte', 'gear', L2(['Proposte', 'Proposals']), active === 'proposte'],
+      tpl: ['#/impostazioni', 'doc', L2(['Modelli', 'Templates']), active === 'impostazioni'],
+      dati: ['#/dati', 'db', t('data'), active === 'dati']
+    };
+    function L(k) { var e = E[k]; return railLink(e[0], e[1], e[2], e[3]); }
+    function G(l) { return '<div class="grp">' + esc(l) + '</div>'; }
+    var top = (home ? L('oggi') : '') + L('flotta');
+    var mid = feat('menu')
+      ? G(L2(['ACQUISTI', 'PURCHASING'])) + L('acq') + L('sup') + L('log') + G(L2(['BORDO', 'VESSEL'])) + L('mag') + L('pms') + L('cert') + L('doc') + G(L2(['CONTROLLO', 'CONTROL'])) + L('bud') + L('acc') + (home ? '' : L('due'))
+      : L('acq') + L('pms') + L('log') + L('mag') + L('doc') + L('cert') + L('due') + L('bud') + L('sup') + L('acc');
+    return '<nav class="rail' + (feat('menu') ? ' grouped' : '') + '" aria-label="' + esc(t('fleet')) + '"><div class="brand">' + esc(ship || 'FLEET') + '</div>' + top + mid +
+      '<div class="sp"></div>' + L('prop') + L('tpl') + L('dati') + '</nav>';
+  }
+
+  /* ---------- 1. coda Oggi ---------- */
+  function snoozed(d) { return DB.snooze && DB.snooze[d.id] && DB.snooze[d.id] > TODAY; }
+  function staleDn(d) { return d.type === 'DN' && isOpen(d) && d.due && d.due < addDays(TODAY, -30); }
+  var QG = [
+    ['eval', ['Offerte arrivate da valutare', 'Offers to evaluate']],
+    ['appr', ['Ordini da approvare', 'Orders to approve']],
+    ['send', ['Ordini approvati da inviare', 'Approved orders to send']],
+    ['new', ['Richieste nuove da bordo', 'New requisitions from vessels']],
+    ['rfq', ['RFQ oltre il limite senza risposta', 'RFQs past limit, no answer']],
+    ['po', ['Ordini in ritardo', 'Late orders']],
+    ['dn', ['Consegne non confermate a bordo', 'Deliveries not confirmed on board']],
+    ['inv', ['Da fatturare', 'To invoice']]
+  ];
+  function todayItems(nave) {
+    var out = [], ok = function (d) { return (!nave || d.ship === nave) && !snoozed(d) && !d.stale; };
+    docs(function (d) { return d.type === 'RQ' && ok(d) && d.status === 'endorsed'; }).forEach(function (d) { out.push({ g: 'new', d: d, why: L2(['Endorsed da bordo il ', 'Endorsed on board on ']) + fd(d.date), age: daysBetween(d.date, TODAY), act: { l: L2(['Prendi in carico', 'Take over']), qadv: 'verifica' } }); });
+    docs(function (d) { return d.type === 'RQ' && ok(d) && (d.status === 'quotazione' || d.status === 'quotata'); }).forEach(function (d) {
+      var rf = children(d.id).filter(function (x) { return x.type === 'RFQ'; }), q = rf.filter(function (x) { return x.status === 'quotata'; }).length, w = rf.filter(function (x) { return x.status === 'inviata'; }).length;
+      if (q) out.push({ g: 'eval', d: d, why: q + '/' + rf.length + ' ' + L2(['offerte arrivate', 'offers in']) + (w ? ' · ' + w + ' ' + L2(['in attesa', 'pending']) : ''), age: daysBetween(d.date, TODAY), act: { l: L2(['Confronta e scegli', 'Compare and pick']), href: '#/doc/' + d.id } });
+    });
+    docs(function (d) { return d.type === 'PO' && ok(d) && d.status === 'bozza'; }).forEach(function (d) {
+      var r = feat('approv') ? apprRule(d, defAccount(d)) : null;
+      out.push({ g: 'appr', d: d, why: money(d.total, d.cur) + (r ? ' · ' + L2(['approva: ', 'approver: ']) + r.who : ''), age: daysBetween(d.date, TODAY), act: { l: L2(['Apri e approva', 'Open and approve']), href: '#/doc/' + d.id } });
+    });
+    docs(function (d) { return d.type === 'PO' && ok(d) && (d.status === 'approvato' || d.needResend); }).forEach(function (d) { out.push({ g: 'send', d: d, why: d.needResend ? 'Rev. ' + d.rev + ' ' + L2(['da rimandare', 'to resend']) : money(d.total, d.cur), age: daysBetween(d.date, TODAY), act: { l: L2(['Apri e invia', 'Open and send']), href: '#/doc/' + d.id } }); });
+    docs(function (d) { return d.type === 'RFQ' && ok(d) && d.status === 'inviata' && d.limit && d.limit < TODAY; }).forEach(function (d) { out.push({ g: 'rfq', d: d, why: L2(['limite ', 'limit ']) + fd(d.limit) + (d.chased ? ' · ' + L2(['sollecitata il ', 'chased on ']) + fd(d.chased) : ''), age: daysBetween(d.limit, TODAY), act: { l: L2(['Sollecita', 'Chase']), chase: 1 } }); });
+    docs(function (d) { return d.type === 'PO' && ok(d) && isOpen(d) && isLate(d); }).forEach(function (d) { out.push({ g: 'po', d: d, why: L2(['consegna prevista ', 'due ']) + fd(d.due) + (d.chased ? ' · ' + L2(['sollecitato il ', 'chased on ']) + fd(d.chased) : ''), age: daysBetween(d.due, TODAY), act: { l: L2(['Sollecita', 'Chase']), chase: 1 } }); });
+    docs(function (d) { return d.type === 'DN' && ok(d) && d.status === 'spedita' && d.due && d.due <= addDays(TODAY, -3) && !staleDn(d); }).forEach(function (d) { out.push({ g: 'dn', d: d, why: L2(['a bordo previsto ', 'due on board ']) + fd(d.due) + (d.chased ? ' · ' + L2(['sollecitata il ', 'chased on ']) + fd(d.chased) : ''), age: daysBetween(d.due, TODAY), act: { l: L2(['Sollecita la nave', 'Chase the vessel']), chase: 1 } }); });
+    var toInv = docs(function (d) { return d.type === 'DN' && d.status === 'ricevuta' && (!nave || d.ship === nave) && !docs(function (x) { return x.type === 'FT' && x.from && x.from.indexOf(d.id) >= 0; }).length; });
+    if (toInv.length) out.push({ g: 'inv', d: null, why: toInv.length + ' ' + L2(['consegne ricevute senza fattura registrata', 'received deliveries without invoice']), age: 0, act: { l: L2(['Apri Contabilità', 'Open Accounting']), href: '#/contabilita' } });
+    return out;
+  }
+  function pageToday(q) {
+    var nave = q.nave || '', items = todayItems(nave);
+    var stale = docs(function (d) { return staleDn(d) && !d.stale && (!nave || d.ship === nave); });
+    var chips = '<div style="display:flex;gap:6px;flex-wrap:wrap"><a class="chip ' + (!nave ? 'c-acc' : 'c-neutral') + '" href="#/">' + esc(L2(['Tutta la flotta', 'Whole fleet'])) + '</a>' + DB.ships.filter(function (s) { return s.infoship; }).map(function (s) { var n = todayItems(s.code).length; return '<a class="chip ' + (nave === s.code ? 'c-acc' : 'c-neutral') + '" href="#/?nave=' + s.code + '">' + s.code + ' · ' + n + '</a>'; }).join('') + '</div>';
+    var kp = '<div class="kpis">' + [['eval', 'appr', 'send'], ['new'], ['rfq', 'po'], ['dn']].map(function (gs, i) {
+      var n = items.filter(function (x) { return gs.indexOf(x.g) >= 0; }).length;
+      var lab = [L2(['Decisioni da prendere', 'Decisions to make']), L2(['Richieste nuove', 'New requisitions']), L2(['Fornitori da sollecitare', 'Suppliers to chase']), L2(['Navi da sollecitare', 'Vessels to chase'])][i];
+      return '<a class="kpi" href="#q-' + gs[0] + '" data-act="qjump" data-k="' + gs[0] + '"><span class="l">' + esc(lab) + '</span><span class="n j">' + n + '</span><span class="s t-' + (n ? 'warn' : 'mute') + '">' + esc(n ? L2(['da fare', 'to do']) : L2(['niente da fare', 'nothing to do'])) + '</span></a>';
+    }).join('') + '</div>';
+    var groups = QG.map(function (g) {
+      var it = items.filter(function (x) { return x.g === g[0]; }).sort(function (a, b) { return b.age - a.age; });
+      if (!it.length) return '';
+      return '<section class="card stack" id="q-' + g[0] + '" style="gap:0"><div style="display:flex;justify-content:space-between;align-items:baseline;padding-bottom:8px"><h2>' + esc(L2(g[1])) + ' <span class="j mute">' + it.length + '</span></h2></div>' +
+        it.slice(0, UI.qAll && UI.qAll[g[0]] ? 999 : 8).map(qRow).join('') +
+        (it.length > 8 && !(UI.qAll && UI.qAll[g[0]]) ? '<button class="btn ghost sm" data-act="qmore" data-k="' + g[0] + '" style="align-self:flex-start;margin-top:8px;color:var(--teal)">' + esc(L2(['Mostra tutte', 'Show all'])) + ' (' + it.length + ')</button>' : '') + '</section>';
+    }).join('');
+    var staleBox = stale.length ? '<section class="card stack" style="border-style:dashed"><h2>' + esc(L2(['Pulizia dati', 'Data clean-up'])) + ' <span class="j mute">' + stale.length + '</span></h2><div style="font-size:13px">' + esc(L2(['Consegne con arrivo previsto da oltre 30 giorni e mai confermate. Probabilmente sono a bordo da tempo: tenerle aperte rende rosso tutto il resto.', 'Deliveries due over 30 days ago and never confirmed.'])) + '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn sm" href="#/docs' + qs({ tipo: 'DN', nave: nave, aperti: 1, late: 1 }) + '">' + esc(L2(['Vedi elenco', 'See list'])) + '</a><button class="btn sm" data-act="stalearchive" data-nave="' + nave + '">' + esc(L2(['Archivia come storiche', 'Archive as historical'])) + '</button></div><div class="mute" style="font-size:12px">' + esc(L2(['Archiviare le toglie dalle code; restano aperte e consultabili. Si annulla con "Ripristina dati".', 'Archiving removes them from queues; they stay open.'])) + '</div></section>' : '';
+    var body = chips + kp + (groups || '<div class="card"><div class="empty">' + esc(L2(['Niente in coda. Buon lavoro.', 'Queue empty.'])) + '</div></div>') + staleBox;
+    var title = new Date().toLocaleDateString(loc(), { weekday: 'long', day: 'numeric', month: 'long' });
+    return shell('oggi', esc(title), L2(['Oggi', 'Today']) + (nave ? ' · ' + nave : ''), '<div class="stack" style="gap:14px">' + body + '</div>');
+  }
+  function qRow(x) {
+    var d = x.d;
+    var btn = x.act.href ? '<a class="btn pri sm" href="' + x.act.href + '">' + esc(x.act.l) + '</a>' : x.act.qadv ? '<button class="btn pri sm" data-act="qadv" data-id="' + d.id + '" data-to="' + x.act.qadv + '">' + esc(x.act.l) + '</button>' : '<button class="btn pri sm" data-act="chase" data-id="' + d.id + '">' + esc(x.act.l) + '</button>';
+    return '<div class="qrow">' + (d ? '<a href="#/doc/' + d.id + '" class="j" style="font-size:12px;color:var(--teal);font-weight:600;white-space:nowrap">' + esc(d.num) + '</a>' + COLS.ship.v(d) : '<span></span><span></span>') +
+      '<div style="min-width:0"><div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(d ? d.desc : '') + '</div><div class="mute" style="font-size:12px">' + esc((d && d.sup ? supName(d.sup) + ' · ' : '') + x.why) + '</div></div>' +
+      '<span class="j ' + (x.age > 14 ? 't-bad' : 'mute') + '" style="font-size:12px;white-space:nowrap">' + (x.age > 0 ? x.age + ' gg' : '') + '</span>' +
+      '<span style="display:flex;gap:6px;justify-content:flex-end">' + btn + (d ? '<button class="btn sm ghost" data-act="snooze" data-id="' + d.id + '" title="' + esc(L2(['Rimanda di 3 giorni', 'Snooze 3 days'])) + '">' + esc(L2(['Rimanda', 'Snooze'])) + '</button>' : '') + '</span></div>';
+  }
+  CLICK.qmore = function (a) { UI.qAll = UI.qAll || {}; UI.qAll[a.getAttribute('data-k')] = 1; render(); };
+  CLICK.qjump = function (a, r) { var el = document.getElementById('q-' + a.getAttribute('data-k')); if (el) el.scrollIntoView({ behavior: 'smooth' }); };
+  CLICK.snooze = function (a) { DB.snooze = DB.snooze || {}; DB.snooze[a.getAttribute('data-id')] = addDays(TODAY, 3); save(); render(); toast(L2(['Rimandato di 3 giorni', 'Snoozed 3 days'])); };
+  CLICK.qadv = function (a) { var d = byId(a.getAttribute('data-id')); if (!d) return; setStatus(d, a.getAttribute('data-to'), L2(['dalla coda Oggi', 'from Today queue'])); save(); render(); toast(d.num + ' · ' + stLabel(d)); };
+  CLICK.stalearchive = function (a) {
+    var nave = a.getAttribute('data-nave'), ds = docs(function (d) { return staleDn(d) && !d.stale && (!nave || d.ship === nave); });
+    formModal(L2(['Archivia consegne storiche', 'Archive historical deliveries']), '<div style="font-size:13px">' + ds.length + ' ' + esc(L2(['consegne con arrivo previsto da oltre 30 giorni escono dalle code e dai rossi. Restano consultabili.', 'deliveries leave the queues.'])) + '</div>',
+      function () { ds.forEach(function (d) { d.stale = true; d.log = d.log || []; d.log.push({ at: TODAY, to: d.status, txt: L2(['Archiviata come storica (pulizia dati)', 'Archived as historical']) }); }); save(); render(); toast(ds.length + ' ' + L2(['archiviate', 'archived'])); }, { ok: L2(['Archivia', 'Archive']) });
+  };
+  CLICK.chase = function (a) {
+    var d = byId(a.getAttribute('data-id')); if (!d) return;
+    var sh = shipBy(d.ship), sp = supById(d.sup) || {}, to, subj, body;
+    if (d.type === 'DN') { to = ''; subj = 'M/V ' + sh.name + ' · DELIVERY ' + d.num + ' · CONFIRMATION OF RECEIPT'; body = 'Dear Captain / Chief Engineer,\n\nAs per our records, delivery ' + d.num + ' (' + d.desc + ') from ' + supName(d.sup) + ' was due on board on ' + fd(d.due) + '.\nKindly confirm receipt and return the stamped and signed delivery note, or advise if the goods have not been received.\n\nBest regards'; }
+    else if (d.type === 'RFQ') { to = sp.email || ''; subj = 'REMINDER · RFQ ' + d.num + ' · M/V ' + sh.name; body = 'Dear Sirs,\n\nWith reference to our Request for Quotation ' + d.num + ' for M/V ' + sh.name + ' sent on ' + fd(d.sentAt || d.date) + ', we have not yet received your quotation.\nKindly revert with your best offer, or let us know if you are unable to quote.\n\nBest regards'; }
+    else { to = sp.email || ''; subj = 'REMINDER · PURCHASE ORDER ' + d.num + ' · M/V ' + sh.name; body = 'Dear Sirs,\n\nWith reference to our Purchase Order ' + d.num + ' for M/V ' + sh.name + ', the agreed delivery date was ' + fd(d.due) + '.\nKindly advise the current status and the new estimated ready date.\n\nBest regards'; }
+    formModal(L2(['Sollecito', 'Reminder']) + ' · ' + d.num,
+      '<label>' + esc(L2(['A', 'To'])) + '<input name="to" value="' + esc(to) + '"></label><label>' + esc(L2(['Oggetto', 'Subject'])) + '<input name="subj" value="' + esc(subj) + '"></label><label>' + esc(L2(['Testo', 'Body'])) + '<textarea name="body" rows="8" class="j" style="font-size:12px">' + esc(body) + '</textarea></label>' +
+      '<div class="mute" style="font-size:12px">' + esc(L2(['Copia il testo o scarica la bozza Outlook, poi segna come sollecitato: la voce sparisce dalla coda per 3 giorni.', 'Copy or download the Outlook draft, then mark as chased.'])) + '</div>',
+      function (f) { d.chased = TODAY; d.log = d.log || []; d.log.push({ at: TODAY, to: d.status, txt: L2(['Sollecito', 'Reminder']) + (f.elements.to.value ? ' · ' + f.elements.to.value : '') }); DB.snooze = DB.snooze || {}; DB.snooze[d.id] = addDays(TODAY, 3); save(); render(); toast(L2(['Sollecito registrato', 'Reminder logged'])); },
+      { w: 680, ok: L2(['Segna come sollecitato', 'Mark as chased']), extra: '<button type="button" class="btn" data-eml="1">' + esc(L2(['Bozza Outlook (.eml)', 'Outlook draft (.eml)'])) + '</button><button type="button" class="btn" data-copy="1">' + esc(L2(['Copia testo', 'Copy text'])) + '</button>',
+        onClick: function (e, f) {
+          if (e.target.getAttribute('data-copy')) { try { navigator.clipboard.writeText(f.elements.subj.value + '\n\n' + f.elements.body.value).then(function () { toast(L2(['Testo copiato', 'Text copied'])); }); } catch (x) { f.elements.body.select(); } }
+          if (e.target.getAttribute('data-eml')) { var bd = '----=_FA_' + Date.now(); var eml = ['X-Unsent: 1', 'To: ' + f.elements.to.value, 'Subject: ' + encHeader(f.elements.subj.value), 'MIME-Version: 1.0', 'Content-Type: text/plain; charset="utf-8"', 'Content-Transfer-Encoding: base64', '', b64utf8(f.elements.body.value.replace(/\n/g, '\r\n'))].join('\r\n'); saveBlob(new Blob([eml], { type: 'message/rfc822' }), 'Sollecito_' + d.num.replace(/\//g, '-') + '.eml'); }
+        } });
+  };
+
+  /* ---------- 2. approvazione a regole ---------- */
+  function defAccount(po) {
+    if (po.account) return po.account;
+    var pa = postable(po.ship), pref = po.dept === 'DECK' ? '00-2-' : '00-3-';
+    return (pa.filter(function (a) { return a.path.indexOf(pref) === 0; })[0] || pa[0] || {}).path;
+  }
+  function apprRule(po, acc) {
+    var A = setts('approval', {}), poE = toEur(po.total || 0, po.cur), v = (budgetAgg(po.ship)[acc] || { b: 0, o: 0, d: 0 });
+    var left = v.b - v.o - v.d, inBud = v.b > 0 && poE <= left;
+    if (poE <= (A.auto || 0) && inBud) return { lvl: 0, who: L2(['Regola automatica', 'Automatic rule']), why: L2(['sotto ', 'below ']) + money(A.auto, 'EUR') + L2([' e dentro il budget del conto', ' and within account budget']) };
+    if (poE <= (A.mgrMax || 0) && inBud) return { lvl: 1, who: A.mgr || '—', why: L2(['sopra ', 'above ']) + money(A.auto, 'EUR') + L2([', dentro il budget', ', within budget']) };
+    return { lvl: 2, who: A.top || '—', why: !inBud ? (v.b ? L2(['supera il residuo del conto (', 'exceeds account remaining (']) + money(left, 'EUR') + ')' : L2(['conto senza budget', 'account without budget'])) : L2(['sopra ', 'above ']) + money(A.mgrMax, 'EUR') };
+  }
+  function apprBox(po, acc) {
+    var r = apprRule(po, acc);
+    return '<div id="rule" class="note" style="color:var(--ink);border-left:4px solid ' + (r.lvl === 0 ? 'var(--green)' : r.lvl === 1 ? 'var(--teal)' : 'var(--red)') + '"><b>' + esc(L2(['Chi approva: ', 'Approver: ']) + r.who) + '</b><br><span style="font-size:12px">' + esc(L2(['Regola: ', 'Rule: ']) + r.why) + '</span></div>';
+  }
+  function autoApprove(po) {
+    var acc = defAccount(po), r = apprRule(po, acc);
+    if (r.lvl === 0) { po.account = acc; setStatus(po, 'approvato', L2(['Approvazione automatica · ', 'Automatic approval · ']) + r.why + ' · ' + acc); return true; }
+    return false;
+  }
+
+  /* ---------- 3. costo arrivato a bordo ---------- */
+  var RX_ASIA = /korea|corea|china|cina|japan|giappone|singapore|taiwan|hong ?kong|busan|shanghai|india|vietnam|malaysia|thailand|indonesia|uae|dubai|asia/i;
+  var RX_EU = /ital|genova|genoa|napoli|naples|spezia|livorno|trieste|venezia|ravenna|rotterdam|netherland|olanda|german|hamburg|bremen|france|francia|marseille|spain|spagna|barcelona|valencia|greece|grecia|piraeus|denmark|copenhagen|belgi|antwerp|poland|sweden|finland|portugal|malta|croatia|austria|europe|\beu\b/i;
+  function zoneOf(r) {
+    var tx = [(r.offer || {}).place].concat((r.lines || []).map(function (l) { return l.origin; })).filter(Boolean).join(' ');
+    if (RX_ASIA.test(tx)) return 'ASIA'; if (RX_EU.test(tx)) return 'EU';
+    if (tx) return 'EXTRA'; return r.cur === 'USD' ? 'ASIA' : 'EU';
+  }
+  function supExtraRatio(sid) {
+    var g = 0, c = 0; docs(function (d) { return d.type === 'FT' && d.sup === sid; }).forEach(function (f) { g += toEur(f.goods || 0, f.cur); (f.charges || []).forEach(function (x) { c += toEur(x.amount || 0, f.cur); }); });
+    return g > 0 ? c / g : null;
+  }
+  function landed(r) {
+    var Lc = setts('landed', {}), z = zoneOf(r), inc = (r.offer || {}).incoterm || 'EXW', incl = /^(CFR|CIF|CPT|DAP|DDP)$/.test(inc);
+    var goods = (r.lines || []).reduce(function (a, x) { return a + (x.quoted ? offerEur(r, x) : 0); }, 0); if (!goods) return null;
+    var ch = toEur((r.charges || []).reduce(function (a, c) { return a + (c.amount || 0); }, 0), r.cur);
+    var hist = supExtraRatio(r.sup), zc = Lc[z] || {};
+    var freight = incl ? 0 : hist != null ? goods * hist : Math.max(zc.min || 0, goods * (zc.pct || 0) / 100);
+    var hub = Lc.hub || 0, cust = z !== 'EU' && inc !== 'DDP' ? goods * (Lc.customs || 0) / 100 : 0;
+    var tot = goods + ch + freight + hub + cust;
+    return { tot: tot, f: tot / goods, goods: goods, ch: ch, freight: freight, hub: hub, cust: cust, z: z, inc: inc, hist: hist };
+  }
+  function landedFoot(r) {
+    var x = landed(r); if (!x) return '';
+    return '<span style="margin-top:4px;padding:6px 8px;border-radius:8px;background:var(--accSoft,rgba(240,140,40,.12));display:flex;flex-direction:column;gap:1px"><span style="font-size:11px;font-weight:700;letter-spacing:.04em">' + esc(L2(['A BORDO STIMATO', 'LANDED ESTIMATE'])) + '</span><span class="j" style="font-weight:700">' + money(x.tot, 'EUR') + '</span>' +
+      '<span class="mute" style="font-size:11px;line-height:1.4">' + esc(x.inc + ' · ' + x.z + ' · ' + L2(['trasp. ', 'freight ']) + nf(x.freight, 0) + (x.hist != null ? L2([' (storico fatture)', ' (invoice history)']) : '') + ' · hub ' + nf(x.hub, 0) + (x.cust ? ' · ' + L2(['dogana ', 'customs ']) + nf(x.cust, 0) : '') + (x.ch ? ' · ' + L2(['spese off. ', 'offer ch. ']) + nf(x.ch, 0) : '')) + '</span></span>';
+  }
+
+  /* ---------- 4. scheda fornitore ---------- */
+  function supScore(sid) {
+    var rf = docs(function (d) { return d.type === 'RFQ' && d.sup === sid; });
+    var ans = rf.filter(function (d) { return d.status === 'quotata'; }).length, ref = rf.filter(function (d) { return d.status === 'rifiutata'; }).length, over = rf.filter(function (d) { return d.status === 'inviata' && d.limit && d.limit < TODAY; }).length;
+    var den = ans + ref + over, resp = den ? ans / den : null;
+    var po = docs(function (d) { return d.type === 'PO' && d.sup === sid && d.status !== 'annullato' && d.due; });
+    var late = po.filter(function (d) { return isLate(d) || (d.status === 'finalizzato' && children(d.id).some(function (x) { return x.type === 'DN' && x.date > d.due; })); }).length;
+    var punct = po.length ? 1 - late / po.length : null;
+    var lts = []; rf.forEach(function (d) { (d.lines || []).forEach(function (l) { if (l.quoted && l.days != null) lts.push(l.days); }); });
+    var lt = lts.length ? Math.round(lts.reduce(function (a, b) { return a + b; }, 0) / lts.length) : null;
+    var parts = [resp, punct].filter(function (x) { return x != null; }), sc = parts.length ? parts.reduce(function (a, b) { return a + b; }, 0) / parts.length : null;
+    var n = den + po.length;
+    return { resp: resp, punct: punct, lt: lt, n: n, grade: sc == null || n < 3 ? '?' : sc >= 0.8 ? 'A' : sc >= 0.6 ? 'B' : 'C', ans: ans, den: den, po: po.length, late: late };
+  }
+  function scoreBadge(sid, full) {
+    var s = supScore(sid), tone = s.grade === 'A' ? 'ok' : s.grade === 'B' ? 'warn' : s.grade === 'C' ? 'bad' : 'neutral';
+    return '<span style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11px"><span class="chip c-' + tone + '" title="' + esc(L2(['Voto calcolato dai documenti', 'Grade computed from documents'])) + '">' + s.grade + '</span>' +
+      '<span class="mute">' + esc(L2(['risp. ', 'resp. ']) + (s.resp == null ? '—' : Math.round(s.resp * 100) + '%') + ' · ' + L2(['puntual. ', 'on time ']) + (s.punct == null ? '—' : Math.round(s.punct * 100) + '%') + (full && s.lt != null ? ' · LT ' + s.lt + ' gg' : '')) + '</span></span>';
+  }
+  function scoreCard(sid) {
+    var s = supScore(sid);
+    return '<section class="card stack"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2>' + esc(L2(['Scheda automatica', 'Automatic scorecard'])) + '</h2>' + scoreBadge(sid, true) + '</div>' +
+      '<dl class="kv"><dt>' + esc(L2(['Risposta alle RFQ', 'RFQ response'])) + '</dt><dd class="j">' + s.ans + ' / ' + s.den + (s.resp != null ? ' · ' + Math.round(s.resp * 100) + '%' : '') + '</dd>' +
+      '<dt>' + esc(L2(['Ordini puntuali', 'Orders on time'])) + '</dt><dd class="j">' + (s.po - s.late) + ' / ' + s.po + (s.punct != null ? ' · ' + Math.round(s.punct * 100) + '%' : '') + '</dd>' +
+      '<dt>' + esc(L2(['Lead time medio promesso', 'Average promised LT'])) + '</dt><dd class="j">' + (s.lt != null ? s.lt + ' gg' : '—') + '</dd>' +
+      '<dt>' + esc(L2(['Spese extra in fattura', 'Invoice extras'])) + '</dt><dd class="j">' + (supExtraRatio(sid) != null ? nf(supExtraRatio(sid) * 100, 1) + '%' : '—') + '</dd></dl>' +
+      '<div class="mute" style="font-size:12px">' + esc(L2(['A da 80%, B da 60%. "?" con meno di 3 documenti. Media di risposta e puntualità.', 'A from 80%, B from 60%. "?" with fewer than 3 documents.'])) + '</div></section>';
+  }
+
+  /* ---------- 5. link offerta fornitore ---------- */
+  function supLink(d) { return location.href.split('#')[0] + '#/offerta/' + d.id; }
+  CLICK.suplink = function () {
+    var d = curDoc(); if (!d) return; var u = supLink(d);
+    formModal(L2(['Link offerta per il fornitore', 'Supplier quotation link']) + ' · ' + d.num,
+      '<div style="font-size:13px">' + esc(L2(['Il fornitore apre il link, compila l\'offerta e la invia: entra da sola in comparazione. Nessun login, scade al limite offerta.', 'The supplier opens the link, fills in and sends the offer.'])) + '</div>' +
+      '<input readonly value="' + esc(u) + '" class="j" style="font-size:12px" onclick="this.select()">' +
+      '<div class="mute" style="font-size:12px">' + esc(L2(['Nel prototipo il link funziona solo su questo computer (i dati sono nel browser). Il link va anche nel testo dell\'email RFQ.', 'In the prototype the link works only on this computer.'])) + '</div>',
+      function () { location.hash = '#/offerta/' + d.id; }, { ok: L2(['Apri come fornitore', 'Open as supplier']), extra: '<button type="button" class="btn" data-copy="1">' + esc(L2(['Copia link', 'Copy link'])) + '</button>', onClick: function (e) { if (e.target.getAttribute('data-copy')) { try { navigator.clipboard.writeText(u).then(function () { toast(L2(['Link copiato', 'Link copied'])); }); } catch (x) {} } } });
+  };
+  function pageSupplierQuote(id) {
+    var d = byId(id), co = setts('company', {}) || {};
+    function wrap(inner) { return '<div class="sq"><header class="sq-h"><div><b>' + esc(co.name || 'Purchasing') + '</b><div class="mute" style="font-size:12px">' + esc(co.email || '') + '</div></div><span class="chip c-neutral">Supplier quotation form</span></header>' + inner + '</div>'; }
+    if (!d || d.type !== 'RFQ') return wrap('<div class="card"><div class="empty">This link is not valid.</div></div>');
+    if (UI.sqDone === d.id) return wrap('<section class="card stack" style="text-align:center;align-items:center;padding:40px"><div style="font-size:40px">✓</div><h2>Thank you, your quotation has been received.</h2><div class="mute">RFQ ' + esc(d.num) + ' · ' + money(d.total, d.cur) + '</div><a class="btn" href="#/doc/' + d.id + '">' + esc(L2(['Torna al prototipo (vista ufficio)', 'Back to the prototype (office view)'])) + '</a></section>');
+    if (!{ creata: 1, inviata: 1, quotata: 1 }[d.status]) return wrap('<div class="card"><div class="empty">This request for quotation is closed.</div></div>');
+    var o = d.offer || {}, sh = shipBy(d.ship);
+    var rows = d.lines.map(function (l, i) {
+      return '<tr><td class="j">' + l.row + '</td><td style="min-width:150px"><b>' + esc(l.desc) + '</b>' + (l.note ? '<div class="mute" style="font-size:12px">' + esc(l.note) + '</div>' : '') + (l.impa ? '<div class="mute j" style="font-size:11px">IMPA ' + esc(l.impa) + '</div>' : '') + '</td><td class="num j">' + nf(l.qty) + ' ' + esc(l.uom) + '</td>' +
+        '<td><input type="checkbox" name="qt' + i + '"' + (l.quoted !== false ? ' checked' : '') + ' aria-label="quoted"></td>' +
+        '<td><input name="oq' + i + '" value="' + nf(l.oqty || l.qty) + '" inputmode="decimal" style="width:70px;text-align:right"></td>' +
+        '<td><input name="pr' + i + '" value="' + (l.price ? nf(l.price) : '') + '" inputmode="decimal" style="width:90px;text-align:right" placeholder="0,00"></td>' +
+        '<td><input name="ds' + i + '" value="' + (l.d1 ? nf(l.d1, 1) : '') + '" inputmode="decimal" style="width:56px;text-align:right"></td>' +
+        '<td><select name="cd' + i + '">' + ['Genuine', 'Non genuine', 'Usato'].map(function (c) { return '<option value="' + c + '"' + (l.cond === c ? ' selected' : '') + '>' + (c === 'Usato' ? 'Used / reconditioned' : c) + '</option>'; }).join('') + '</select></td>' +
+        '<td><input name="or' + i + '" value="' + esc(l.origin || '') + '" style="width:110px" placeholder="e.g. Busan"></td>' +
+        '<td><input name="lt' + i + '" value="' + (l.days == null ? '' : l.days) + '" inputmode="numeric" style="width:56px;text-align:right"></td></tr>';
+    }).join('');
+    var ch = function (k) { var c = (d.charges || []).filter(function (x) { return x.kind === k; })[0]; return c ? nf(c.amount) : ''; };
+    var lab = function (l, inner) { return '<label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">' + l + inner + '</label>'; };
+    return wrap('<section class="card stack"><h1 class="h1" style="font-size:22px">Request for quotation ' + esc(d.num) + '</h1>' +
+      '<div class="mute" style="font-size:13px">M/V ' + esc(sh.name) + ' · ' + esc(d.desc) + ' · for ' + esc(supName(d.sup)) + ' · please quote by <b>' + fd(d.limit) + '</b> · currency <b>' + esc(d.cur) + '</b></div>' +
+      (d.status === 'quotata' ? '<div class="note">Quotation already received' + (o.date ? ' on ' + fd(o.date) : '') + '. You can update it until the deadline.</div>' : '') +
+      '</section><form id="sqform" data-id="' + d.id + '" class="stack" style="gap:14px"><section class="card stack"><h2>Offer terms</h2><div class="filters">' +
+      lab('Incoterm', '<select name="inco">' + ['EXW', 'FCA', 'FOB', 'CFR', 'CIF', 'CPT', 'DAP', 'DDP'].map(function (x) { return '<option' + (o.incoterm === x ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select>') +
+      lab('Place', '<input name="place" value="' + esc(o.place || '') + '" placeholder="e.g. Busan, Genoa">') + lab('Valid until', '<input type="date" name="valid" value="' + esc(o.validTo || addDays(TODAY, 30)) + '">') + lab('Your reference', '<input name="ref" value="' + esc(o.ref || '') + '">') + '</div>' +
+      '<div class="filters" style="align-items:flex-end">' + lab('Lead time for all items (days)', '<input id="sq_lt" inputmode="numeric" style="width:80px">') + lab('Condition for all items', '<select id="sq_cd"><option value="">—</option><option value="Genuine">Genuine</option><option value="Non genuine">Non genuine</option><option value="Usato">Used / reconditioned</option></select>') + lab('Origin / stock for all items', '<input id="sq_or">') +
+      '<button type="button" class="btn" data-act="sqmass">Apply to all items</button></div></section>' +
+      '<section class="card stack"><h2>Items</h2><div class="tablebox"><table class="grid edit" style="min-width:900px"><thead><tr><th>Row</th><th>Description</th><th class="num">Qty req.</th><th>Quote</th><th class="num">Qty off.</th><th class="num">Unit price ' + esc(d.cur) + '</th><th class="num">Disc. %</th><th>Condition</th><th>Origin / stock</th><th class="num">LT days</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<div class="filters">' + lab('Transport', '<input name="ch_transport" value="' + ch('transport') + '" inputmode="decimal" style="width:100px;text-align:right">') + lab('Packing', '<input name="ch_packing" value="' + ch('packing') + '" inputmode="decimal" style="width:100px;text-align:right">') + lab('Other charges', '<input name="ch_other" value="' + ch('other') + '" inputmode="decimal" style="width:100px;text-align:right">') + lab('Your quotation (PDF, optional)', '<input type="file" name="file">') + '</div></section>' +
+      '<div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn pri" type="submit">Send quotation</button></div></form>');
+  }
+  CLICK.sqmass = function () {
+    var f = document.getElementById('sqform'); if (!f) return; var d = byId(f.getAttribute('data-id'));
+    var lt = document.getElementById('sq_lt').value, cd = document.getElementById('sq_cd').value, og = document.getElementById('sq_or').value;
+    d.lines.forEach(function (l, i) { if (lt !== '') f.elements['lt' + i].value = lt; if (cd) f.elements['cd' + i].value = cd; if (og) f.elements['or' + i].value = og; });
+    toast('Applied to all items');
+  };
+  function submitSupplierQuote(f) {
+    var d = byId(f.getAttribute('data-id')); if (!d) return;
+    var any = false;
+    d.lines.forEach(function (l, i) {
+      l.quoted = f.elements['qt' + i].checked && parseNum(f.elements['pr' + i].value) > 0;
+      l.oqty = parseNum(f.elements['oq' + i].value) || l.qty; l.price = parseNum(f.elements['pr' + i].value); l.d1 = parseNum(f.elements['ds' + i].value); l.d2 = 0;
+      l.cond = f.elements['cd' + i].value; l.origin = f.elements['or' + i].value.trim(); var lt = f.elements['lt' + i].value.trim(); l.days = lt === '' ? null : parseInt(lt, 10);
+      l.net = l.quoted ? Math.round(l.oqty * l.price * (1 - l.d1 / 100) * 100) / 100 : 0; if (l.quoted) any = true;
+    });
+    if (!any) { toast('Please enter at least one unit price'); return; }
+    d.charges = ['transport', 'packing', 'other'].map(function (k) { return { kind: k, amount: parseNum(f.elements['ch_' + k].value) }; }).filter(function (c) { return c.amount; });
+    var was = d.status === 'quotata';
+    d.offer = { ref: f.elements.ref.value.trim(), date: TODAY, validTo: f.elements.valid.value, days: f.elements.valid.value ? daysBetween(TODAY, f.elements.valid.value) : 30, incoterm: f.elements.inco.value, place: f.elements.place.value.trim(), via: 'link' };
+    d.total = docTotal(d);
+    var done = function () {
+      if (was) { d.log.push({ at: TODAY, to: d.status, txt: L2(['Offerta aggiornata dal fornitore tramite link · ', 'Offer updated by supplier via link · ']) + money(d.total, d.cur) }); }
+      else setStatus(d, 'quotata', L2(['Offerta inserita dal fornitore tramite link · ', 'Offer entered by supplier via link · ']) + money(d.total, d.cur));
+      UI.sqDone = d.id; save(); render(); window.scrollTo(0, 0);
+    };
+    if (f.elements.file.files.length) uploadFiles(f.elements.file.files, function (out) { d.attachments = d.attachments || []; out.forEach(function (x) { d.attachments.push({ id: 'A-' + x.key, name: L2(['Offerta fornitore: ', 'Supplier offer: ']) + x.name, kind: 'PDF', file: x }); }); done(); });
+    else done();
+  }
+
+  /* ---------- 6. QR e ricevimento a bordo ---------- */
+  var qrP = null;
+  function loadQr() { if (window.qrcode) return Promise.resolve(); if (qrP) return qrP; qrP = new Promise(function (ok, ko) { var s = document.createElement('script'); s.src = 'lib/qrcode.js'; s.onload = ok; s.onerror = ko; document.head.appendChild(s); }); return qrP; }
+  function qrSvg(text, cell) { var q = window.qrcode(0, 'M'); q.addData(text); q.make(); return q.createSvgTag({ cellSize: cell || 4, margin: 2, scalable: true }); }
+  function rcvLink(d) { return location.href.split('#')[0] + '#/ricevi/' + d.id; }
+  function qrCard(d) {
+    var recv = d.status === 'ricevuta';
+    return '<section class="card" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><div data-qr="' + esc(rcvLink(d)) + '" style="width:112px;height:112px;background:#fff;border-radius:8px;padding:4px;flex:0 0 auto"></div>' +
+      '<div class="stack" style="gap:6px;flex:1;min-width:220px"><h2 style="margin:0">' + esc(L2(['Etichetta collo e ricevimento con QR', 'Package label and QR receipt'])) + '</h2>' +
+      '<div style="font-size:13px">' + esc(recv ? L2(['Ricevuta a bordo.', 'Received on board.']) : L2(['Stampa l\'etichetta e mandala al fornitore o all\'hub da applicare sul collo. A bordo si inquadra il QR col telefono: conta, foto della DN firmata, conferma.', 'Print the label for the package. On board, scan the QR: count, photo of the signed DN, confirm.'])) + '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" data-act="qrprint">' + esc(L2(['Stampa etichetta', 'Print label'])) + '</button>' + (recv ? '' : '<a class="btn sm pri" href="#/ricevi/' + d.id + '">' + esc(L2(['Apri la pagina di bordo', 'Open vessel page'])) + '</a>') + '</div></div></section>';
+  }
+  function afterRender() {
+    var els = document.querySelectorAll('[data-qr]'); if (!els.length) return;
+    loadQr().then(function () { [].forEach.call(els, function (el) { el.innerHTML = qrSvg(el.getAttribute('data-qr')); var s = el.querySelector('svg'); if (s) { s.setAttribute('width', '100%'); s.setAttribute('height', '100%'); } }); }).catch(function () {});
+  }
+  CLICK.qrprint = function () {
+    var d = curDoc(); if (!d) return; var po = d.from && byId(d.from[0]), sh = shipBy(d.ship);
+    loadQr().then(function () {
+      var html = '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(d.num) + '</title><style>body{font-family:Helvetica,Arial,sans-serif;margin:0}.l{width:100mm;height:70mm;border:1px dashed #999;box-sizing:border-box;padding:5mm;display:flex;gap:4mm}.q{width:40mm;height:40mm}.q svg{width:100%;height:100%}h1{font-size:18pt;margin:0}p{margin:1mm 0;font-size:10pt}</style></head><body><div class="l"><div class="q">' + qrSvg(rcvLink(d), 6) + '</div><div><h1>M/V ' + esc(sh.name) + '</h1><p><b>DN ' + esc(d.num) + '</b></p><p>PO ' + esc(po ? po.num : '—') + '</p><p>' + esc(supName(d.sup)) + '</p><p>' + esc(d.desc) + '</p><p style="font-size:8pt;margin-top:3mm">Scan on board to confirm receipt</p></div></div></body></html>';
+      var fr = document.createElement('iframe'); fr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'; document.body.appendChild(fr);
+      fr.contentDocument.open(); fr.contentDocument.write(html); fr.contentDocument.close();
+      setTimeout(function () { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { toast('Stampa non disponibile'); } setTimeout(function () { fr.remove(); }, 2000); }, 300);
+    });
+  };
+  function pageReceive(id) {
+    var d = byId(id), sh = d && shipBy(d.ship);
+    function wrap(inner) { return '<div class="sq mob"><header class="sq-h"><div><b>' + esc(sh ? 'M/V ' + sh.name : 'Fleet') + '</b><div class="mute" style="font-size:12px">' + esc(L2(['Ricevimento a bordo', 'On-board receipt'])) + '</div></div><a class="btn sm" href="#/doc/' + id + '">' + esc(L2(['Ufficio', 'Office'])) + '</a></header>' + inner + '</div>'; }
+    if (!d || d.type !== 'DN') return wrap('<div class="card"><div class="empty">QR ?</div></div>');
+    if (d.status === 'ricevuta') return wrap('<section class="card stack" style="text-align:center;align-items:center;padding:32px"><div style="font-size:40px">✓</div><h2>' + esc(L2(['Ricevuta e caricata a magazzino', 'Received and loaded'])) + '</h2><div class="mute">' + esc(d.num + ' · ' + (d.signed || '')) + '</div><a class="btn" href="#/magazzino?nave=' + d.ship + '">' + esc(t('stores')) + '</a></section>');
+    if (d.status === 'pronta') return wrap('<div class="card"><div class="empty">' + esc(L2(['Consegna non ancora spedita.', 'Delivery not shipped yet.'])) + '</div></div>');
+    var po = d.from && byId(d.from[0]);
+    var lines = (d.lines || []).map(function (l, i) {
+      return '<div class="card stack" style="gap:8px;padding:12px"><div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:15px">' + esc(l.desc) + '</b><span class="j mute">' + l.row + '</span></div>' + (l.note ? '<div class="mute" style="font-size:12px">' + esc(l.note) + '</div>' : '') +
+        '<div style="display:flex;align-items:center;gap:10px"><span class="mute" style="font-size:13px;flex:1">' + esc(L2(['Spediti', 'Shipped'])) + ' <b class="j">' + nf(l.qty) + '</b> ' + esc(l.uom) + '</span>' +
+        '<button type="button" class="btn step" data-act="rcvstep" data-i="' + i + '" data-d="-1" aria-label="-">−</button><input name="q' + i + '" value="' + nf(l.qty) + '" inputmode="decimal" class="j" style="width:70px;text-align:center;font-size:18px"><button type="button" class="btn step" data-act="rcvstep" data-i="' + i + '" data-d="1" aria-label="+">+</button></div>' +
+        '<input name="loc' + i + '" value="' + esc(locOf(d.ship, l.item) || '') + '" placeholder="' + esc(L2(['Ubicazione (es. Magazzino macchina A3)', 'Location'])) + '"></div>';
+    }).join('');
+    return wrap('<section class="card stack" style="gap:4px"><span class="j mute">' + esc(d.num) + (po ? ' · PO ' + esc(po.num) : '') + '</span><h1 class="h1" style="font-size:20px">' + esc(d.desc) + '</h1><span class="mute" style="font-size:13px">' + esc(supName(d.sup)) + '</span></section>' +
+      '<form id="rcvform" data-id="' + d.id + '" class="stack" style="gap:10px">' + (lines || '<div class="card stack"><label>' + esc(L2(['Colli ricevuti', 'Packages received'])) + '<input name="pk" inputmode="numeric" value="1" style="font-size:18px"></label></div>') +
+      '<section class="card stack"><label style="font-size:15px;color:var(--ink)">' + esc(L2(['Foto della DN timbrata e firmata', 'Photo of the stamped and signed DN'])) + '<input type="file" name="photo" accept="image/*" capture="environment" required></label>' +
+      '<label style="flex-direction:row;gap:10px;align-items:center;color:var(--ink);font-size:15px"><input type="checkbox" name="signed" required style="width:22px;height:22px"> ' + esc(L2(['DN timbrata e firmata', 'DN stamped and signed'])) + '</label></section>' +
+      '<button class="btn pri" type="submit" style="font-size:17px;padding:14px">' + esc(L2(['Conferma ricezione', 'Confirm receipt'])) + '</button>' +
+      '<div class="mute" style="font-size:12px;text-align:center">' + esc(L2(['Nella versione ufficiale funziona anche senza rete: la conferma parte quando la nave torna connessa.', 'In the final version it also works offline.'])) + '</div></form>');
+  }
+  CLICK.rcvstep = function (a) { var f = document.getElementById('rcvform'); var el = f.elements['q' + a.getAttribute('data-i')]; el.value = nf(Math.max(0, parseNum(el.value) + (+a.getAttribute('data-d')))); };
+  function submitReceive(f) {
+    var dn = byId(f.getAttribute('data-id')); if (!dn) return; var po = dn.from && byId(dn.from[0]);
+    uploadFiles(f.elements.photo.files, function (out) {
+      DB.moves = DB.moves || [];
+      (dn.lines || []).forEach(function (l, i) {
+        var q = Math.max(0, parseNum(f.elements['q' + i].value)); l.recv = q;
+        if (!l.item && q > 0) l.item = ensureItem(l, po);
+        if (q > 0 && l.item) {
+          var pl = po && po.lines ? po.lines.filter(function (x) { return x.row === l.src; })[0] : null;
+          var lc = (f.elements['loc' + i].value || '').trim(); if (lc) { DB.loc = DB.loc || {}; DB.loc[dn.ship + '|' + l.item] = lc; }
+          DB.moves.push({ id: 'M-' + dn.id + '-' + l.row + '-' + Date.now(), ship: dn.ship, item: l.item, date: TODAY, qty: q, kind: 'carico', doc: dn.id, row: l.row, loc: lc, cost: pl ? Math.round(unitEur(po, pl) * 10000) / 10000 : 0 });
+        }
+      });
+      dn.attachments = dn.attachments || []; out.forEach(function (x) { dn.attachments.push({ id: 'A-' + x.key, name: L2(['DN firmata (foto da bordo)', 'Signed DN (photo from vessel)']), kind: L2(['Foto', 'Photo']), file: x }); });
+      dn.signed = L2(['DN firmata', 'Signed DN']) + (out[0] ? ': ' + out[0].name : '') + ' · ' + fd(TODAY) + ' · QR';
+      dn.side = 'office'; if (dn.track) dn.track.stage = 'a_bordo';
+      setStatus(dn, 'ricevuta', L2(['Confermata a bordo con QR', 'Confirmed on board via QR']) + ((dn.lines || []).length ? ' · ' + dn.lines.length + ' ' + t('rows') : f.elements.pk ? ' · ' + f.elements.pk.value + ' ' + L2(['colli', 'packages']) : ''));
+      save(); render(); window.scrollTo(0, 0);
+    });
+  }
+
+  /* ---------- 7. spedizioni consolidate ---------- */
+  function shipments() { return DB.shipments = DB.shipments || []; }
+  function shpById(id) { return shipments().filter(function (s) { return s.id === id; })[0]; }
+  function shpOf(dnId) { return shipments().filter(function (s) { return s.dns.indexOf(dnId) >= 0 && s.status !== 'chiusa'; })[0]; }
+  function curT() { var r = route(); if (r.seg[0] === 'spedizione') return shpById(r.seg[1]); return curDoc(); }
+  function dnValue(dn) {
+    var po = dn.from && byId(dn.from[0]); if (!po || !po.lines) return 0;
+    if (dn.lines && dn.lines.length) return dn.lines.reduce(function (a, l) { var pl = po.lines.filter(function (x) { return x.row === l.src; })[0]; return a + (pl ? unitEur(po, pl) * l.qty : 0); }, 0);
+    return toEur(po.total || 0, po.cur);
+  }
+  function logAccount() { var a = DB.accounts.filter(function (x) { return x.post && /logistic/i.test(x.desc); })[0]; return a ? a.path : null; }
+  CLICK.shpnew = function (a, r) {
+    var nave = r.q.nave || 'PEP';
+    var cand = docs(function (d) { return d.type === 'DN' && d.ship === nave && isOpen(d) && !d.stale && !shpOf(d.id); }).sort(function (x, y) { return stageIdx(stageOf(y)) - stageIdx(stageOf(x)); });
+    var shipSel = '<select name="ship">' + DB.ships.filter(function (s) { return s.infoship; }).map(function (s) { return '<option value="' + s.code + '"' + (s.code === nave ? ' selected' : '') + '>' + s.code + ' · ' + esc(s.name) + '</option>'; }).join('') + '</select>';
+    formModal(L2(['Nuova spedizione consolidata', 'New consolidated shipment']),
+      '<div class="filters"><label>' + esc(t('c_ship')) + shipSel + '</label><label>Hub<input name="hub" value="' + esc(((DB.settings || {}).forwarders || [])[0] ? (DB.settings.forwarders[0] + ' · Genova') : 'Hub · Genova') + '"></label><label>' + esc(L2(['Porto / agente', 'Port / agent'])) + '<input name="port"></label></div>' +
+      '<div class="filters"><label>ETD<input type="date" name="etd" value="' + addDays(TODAY, 3) + '"></label><label>ETA ' + esc(L2(['a bordo', 'on board'])) + '<input type="date" name="eta" value="' + addDays(TODAY, 10) + '"></label></div>' +
+      '<div class="stack" style="gap:4px"><span class="mute" style="font-size:13px">' + esc(L2(['Consegne da consolidare', 'Deliveries to consolidate'])) + ' (' + nave + ')</span>' +
+      (cand.length ? cand.slice(0, 30).map(function (d) { var st = stageOf(d); return '<label style="flex-direction:row;gap:8px;color:var(--ink);font-size:13px"><input type="checkbox" name="dn" value="' + d.id + '"' + (/hub/.test(st) ? ' checked' : '') + '> <span class="j">' + esc(d.num) + '</span> ' + esc(d.desc) + ' <span class="mute">· ' + esc(supName(d.sup)) + ' · ' + esc(L2(STAGES[stageIdx(st)][1])) + '</span></label>'; }).join('') : '<div class="mute">' + esc(L2(['Nessuna consegna aperta per questa nave.', 'No open delivery for this vessel.'])) + '</div>') + '</div>',
+      function (f) {
+        var ids = [].map.call(f.querySelectorAll('input[name=dn]:checked'), function (c) { return c.value; });
+        if (!ids.length) { toast(L2(['Scegli almeno una consegna', 'Pick at least one delivery'])); return false; }
+        var sh = f.elements.ship.value, n = shipments().filter(function (s) { return s.ship === sh; }).length + 1;
+        var s = { id: 'SHP-' + Date.now(), num: sh + '/' + TODAY.slice(0, 4) + '/SP/' + String(n).padStart(4, '0'), ship: sh, dns: ids, hub: f.elements.hub.value.trim(), port: f.elements.port.value.trim(), etd: f.elements.etd.value, due: f.elements.eta.value, status: 'aperta', track: { stage: 'in_hub', legs: [], events: [] }, costs: [], log: [{ at: TODAY, to: 'aperta', txt: L2(['Creata con ', 'Created with ']) + ids.length + ' DN' }] };
+        shipments().push(s);
+        ids.forEach(function (id) { var d = byId(id); d.log = d.log || []; d.log.push({ at: TODAY, to: d.status, txt: L2(['Consolidata nella spedizione ', 'Consolidated in shipment ']) + s.num }); });
+        save(); location.hash = '#/spedizione/' + s.id;
+      }, { w: 760, ok: L2(['Crea spedizione', 'Create shipment']), onInput: function (e, f) { if (e.target.name === 'ship') { f.closest('.modal-bg').remove(); location.hash = '#/logistica?nave=' + e.target.value; setTimeout(function () { CLICK.shpnew(null, route()); }, 50); } } });
+  };
+  function pageShipment(id) {
+    var s = shpById(id); if (!s) return pageLogistics({});
+    var dns = s.dns.map(byId).filter(Boolean), tot = dns.reduce(function (a, d) { return a + dnValue(d); }, 0);
+    var cost = (s.costs || []).reduce(function (a, c) { return a + (c.amount || 0); }, 0);
+    var rows = dns.map(function (d) {
+      var v = dnValue(d), al = tot ? cost * v / tot : cost / dns.length, po = d.from && byId(d.from[0]);
+      return '<tr class="r" data-href="#/doc/' + d.id + '"><td class="j">' + esc(d.num) + '</td><td>' + esc(d.desc) + '</td><td>' + esc(supName(d.sup)) + '</td><td class="j">' + esc(po ? po.num : '—') + '</td><td>' + chip(d) + '</td><td class="num j">' + nf(v) + '</td><td class="num j"><b>' + nf(al) + '</b></td></tr>';
+    }).join('');
+    var ci = function (k, l) { var c = (s.costs || []).filter(function (x) { return x.kind === k; })[0]; return '<label class="stack" style="gap:3px;font-size:12px;color:var(--mute)">' + esc(l) + '<input data-shpcost="' + k + '" value="' + (c ? nf(c.amount) : '') + '" inputmode="decimal" style="width:110px;text-align:right"></label>'; };
+    var acc = logAccount();
+    var body = '<div class="stack" style="gap:8px"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="j mute">' + esc(s.num) + '</span><span class="chip c-' + (s.status === 'consegnata' ? 'ok' : 'info') + '">' + esc(s.status === 'consegnata' ? L2(['Consegnata a bordo', 'Delivered on board']) : L2(['In corso', 'In progress'])) + '</span><span class="chip c-neutral">' + dns.length + ' DN</span></div>' +
+      '<h1 class="h1">' + esc(L2(['Spedizione consolidata', 'Consolidated shipment'])) + ' → M/V ' + esc(shipBy(s.ship).name) + '</h1><div class="mute" style="font-size:13px">' + esc([s.hub, s.port].filter(Boolean).join(' → ')) + ' · ETD ' + fd(s.etd) + ' · ETA ' + fd(s.due) + '</div></div>' +
+      logisticsCard(s) +
+      '<section class="card stack"><h2>' + esc(L2(['Consegne nella spedizione', 'Deliveries in the shipment'])) + '</h2><div class="tablebox"><table class="grid"><thead><tr><th>DN</th><th>' + esc(t('c_desc')) + '</th><th>' + esc(t('c_sup')) + '</th><th>PO</th><th>' + esc(t('c_status')) + '</th><th class="num">' + esc(L2(['Valore €', 'Value €'])) + '</th><th class="num">' + esc(L2(['Costi ripartiti €', 'Allocated costs €'])) + '</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<div class="mute" style="font-size:12px">' + esc(L2(['Ogni DN si conferma a bordo da sola (QR o postazione Bordo): la spedizione porta i colli, la DN prova cosa è arrivato.', 'Each DN is confirmed on board on its own.'])) + '</div></section>' +
+      '<section class="card stack"><h2>' + esc(L2(['Costi della spedizione', 'Shipment costs'])) + '</h2><div class="filters">' + ci('freight', L2(['Trasporto', 'Freight'])) + ci('hub', 'Hub / handling') + ci('customs', L2(['Dogana', 'Customs'])) + ci('agent', L2(['Agenzia / boat', 'Agency / boat'])) + '</div>' +
+      '<div style="font-size:13px">' + esc(L2(['Totale ', 'Total '])) + '<b class="j">' + money(cost, 'EUR') + '</b>' + esc(L2([' ripartito sulle DN in proporzione al valore e messo a budget sul conto ', ' split on DNs by value and booked on account '])) + '<span class="j">' + esc(acc || '—') + '</span> (' + esc(L2(['ordinato finché non è a bordo, poi consegnato', 'ordered until on board, then delivered'])) + ').</div></section>' +
+      '<section class="card stack"><h2>' + esc(t('history')) + '</h2><div class="log">' + (s.log || []).slice().reverse().map(function (e) { return '<div><span class="j">' + fd(e.at) + '</span><span>' + esc(e.txt) + '</span></div>'; }).join('') + '</div></section>';
+    return shell('logistica', crumb([[t('fleet'), '#/'], [L2(['Logistica', 'Logistics']), '#/logistica?nave=' + s.ship]]), s.num, '<div class="stack" style="gap:14px;max-width:1100px">' + body + '</div>');
+  }
+  function shipmentBudget(ship, add) {
+    var acc = logAccount(); if (!acc) return;
+    shipments().forEach(function (s) { if (s.ship !== ship) return; var c = (s.costs || []).reduce(function (a, x) { return a + (x.amount || 0); }, 0); if (!c) return; if (s.status === 'consegnata') add(acc, 0, c); else add(acc, c, 0); });
+  }
+
+  /* ---------- 8. catalogo dalle tavole + suggerimenti ---------- */
+  CLICK.tdparts = function (a) {
+    var td = (DB.techdocs || []).filter(function (x) { return x.id === a.getAttribute('data-id'); })[0]; if (!td || !td.parts) return;
+    var have = {}; (DB.items || []).forEach(function (i) { if (i.pn) have[i.pn] = 1; });
+    var pfx = td.prefix || (td.refs || [])[0];
+    formModal(L2(['Ricambi letti dalla tavola', 'Parts read from the plate']) + ' · ' + td.title,
+      '<div class="mute" style="font-size:13px">' + esc(L2(['Elenco ricavato dalla tavola con riconoscimento del testo (OCR), da controllare prima di aggiungerlo. Nella versione ufficiale la lettura parte da sola al caricamento del PDF.', 'List read from the plate with OCR, to be checked.'])) + '</div>' +
+      '<div class="tablebox" style="max-height:55vh;overflow:auto"><table class="grid"><thead><tr><th></th><th>Item</th><th>P/N</th><th>' + esc(t('c_desc')) + '</th><th>' + esc(L2(['Q.tà per motore/cil.', 'Qty per engine/cyl.'])) + '</th><th></th></tr></thead><tbody>' +
+      td.parts.map(function (p, i) { var pn = pfx + '-' + p.no, h = have[pn]; return '<tr><td><input type="checkbox" name="pp" value="' + i + '"' + (h ? ' disabled' : ' checked') + '></td><td class="j">' + p.no + '</td><td class="j" style="white-space:nowrap">' + esc(pn) + '</td><td>' + esc(p.desc) + '</td><td class="j">' + esc(p.qty || '') + '</td><td>' + (h ? '<span class="chip c-ok">' + esc(L2(['a catalogo', 'in catalogue'])) + '</span>' : '<span class="chip c-info">' + esc(L2(['nuovo', 'new'])) + '</span>') + '</td></tr>'; }).join('') + '</tbody></table></div>',
+      function (f) {
+        var n = 0; DB.items = DB.items || [];
+        [].forEach.call(f.querySelectorAll('input[name=pp]:checked'), function (c) { var p = td.parts[+c.value], pn = pfx + '-' + p.no; DB.items.push({ id: 'M-' + pn, code: pn, impa: null, pn: pn, desc: p.desc.toUpperCase(), uom: 'PCE', maker: td.maker, model: td.model, equipment: td.equipment, ships: td.ships, note: 'Item ' + p.no + (p.qty ? ' · ' + p.qty : '') }); n++; });
+        save(); render(); toast(n + ' ' + L2(['articoli aggiunti al catalogo', 'items added to catalogue']));
+      }, { w: 860, ok: L2(['Aggiungi al catalogo', 'Add to catalogue']) });
+  };
+  var STOP = { AND: 1, FOR: 1, THE: 1, WITH: 1, PER: 1, CON: 1, DEL: 1, DELLA: 1, PCS: 1, PCE: 1, SET: 1, NEW: 1, SPARE: 1, PARTS: 1, REQ: 1 };
+  function simItems(text) {
+    var w = (text || '').toUpperCase().split(/[^A-Z0-9\-]+/).filter(function (x) { return x.length >= 3 && !STOP[x]; });
+    if (!w.length) return [];
+    return (DB.items || []).filter(function (it) { return !it.generic; }).map(function (it) { var tx = itemText(it), sc = 0; w.forEach(function (x) { if (tx.indexOf(x) >= 0) sc += x.length > 5 ? 2 : 1; }); return { it: it, sc: sc }; })
+      .filter(function (x) { return x.sc >= 2 || (w.length === 1 && x.sc >= 1); }).sort(function (a, b) { return b.sc - a.sc; }).slice(0, 3);
+  }
+  function suggHtml(l, i) {
+    var s = simItems(l.desc + ' ' + (l.note || '')); if (!s.length) return '';
+    return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:4px;font-size:12px"><span class="t-warn">' + esc(L2(['Senza codice. Forse è:', 'No code. Maybe:'])) + '</span>' + s.map(function (x) { return '<button type="button" class="btn sm" data-act="usesugg" data-i="' + i + '" data-id="' + x.it.id + '" style="font-size:11px">' + esc((x.it.impa || x.it.pn || '') + ' · ' + x.it.desc) + '</button>'; }).join('') + '</div>';
+  }
+  CLICK.usesugg = function (a) {
+    var d = curDoc(); if (!d || !UI.edit || UI.edit.id !== d.id) return; var l = d.lines[+a.getAttribute('data-i')], it = itemById(a.getAttribute('data-id')); if (!l || !it) return;
+    l.item = it.id; l.code = it.code; l.impa = it.impa || ''; l.desc = it.desc; l.note = [it.pn && it.pn !== it.impa ? 'P/N ' + it.pn : '', it.note].filter(Boolean).join(' · '); l.uom = it.uom || l.uom; if (it.equipment && !l.asset) l.asset = it.equipment;
+    UI.edit.dirty = true; render(); toast(L2(['Riga collegata all\'articolo a catalogo', 'Row linked to catalogue item']));
+  };
 
   /* ---------- render & events ---------- */
   function render() {
     var r = route(), s = r.seg, html;
-    if (!s.length) html = pageHome();
+    if (s[0] === 'offerta' || s[0] === 'ricevi') { root.innerHTML = s[0] === 'offerta' ? pageSupplierQuote(s[1]) : pageReceive(s[1]); document.documentElement.lang = P.lang; afterRender(); return; }
+    if (!s.length) html = feat('oggi') ? pageToday(r.q) : pageHome();
+    else if (s[0] === 'flotta') html = pageHome();
+    else if (s[0] === 'proposte') html = pageProposals();
+    else if (s[0] === 'spedizione') html = pageShipment(s[1]);
     else if (s[0] === 'nave') html = pageShip(s[1]);
     else if (s[0] === 'docs') html = pageDocs(r.q);
     else if (s[0] === 'doc') html = pageDoc(s[1]);
@@ -2036,6 +2503,7 @@
     else html = pageHome();
     var active = document.activeElement, keepFilter = active && active.getAttribute && active.getAttribute('data-filter') === 'q' ? active.selectionStart : null;
     root.innerHTML = html;
+    afterRender();
     document.documentElement.lang = P.lang;
     if (keepFilter !== null) { var f = root.querySelector('[data-filter="q"]'); if (f) { f.focus(); try { f.setSelectionRange(keepFilter, keepFilter); } catch (e) {} } }
   }
@@ -2097,8 +2565,15 @@
     else if (act === 'reset') { modal(t('d_reset'), [{ n: 'ok', l: t('d_resetQ'), v: P.lang === 'en' ? 'RESET' : 'RIPRISTINA' }], function () { DB = clone(window.SEED); save(); render(); toast(t('done')); }); }
     else if (act === 'copyjson') { try { navigator.clipboard.writeText(JSON.stringify(DB)).then(function () { toast(t('done')); }, function () { toast('Clipboard ?'); }); } catch (x) { toast('Clipboard ?'); } }
   });
+  root.addEventListener('submit', function (e) {
+    if (e.target.id === 'sqform') { e.preventDefault(); submitSupplierQuote(e.target); }
+    else if (e.target.id === 'rcvform') { e.preventDefault(); submitReceive(e.target); }
+  });
   root.addEventListener('change', function (e) {
     var el = e.target;
+    if (el.getAttribute('data-aset')) { aset(el.getAttribute('data-aset'), parseNum(el.value)); toast(L2(['Parametro salvato', 'Parameter saved'])); return; }
+    if (el.getAttribute('data-asett')) { aset(el.getAttribute('data-asett'), el.value.trim()); toast(L2(['Parametro salvato', 'Parameter saved'])); return; }
+    if (el.getAttribute('data-shpcost')) { var sp = shpById(route().seg[1]); if (sp) { var kk = el.getAttribute('data-shpcost'), am = parseNum(el.value); sp.costs = (sp.costs || []).filter(function (c) { return c.kind !== kk; }); if (am) sp.costs.push({ kind: kk, amount: am }); sp.log.push({ at: TODAY, to: sp.status, txt: L2(['Costo ', 'Cost ']) + kk + ' ' + nf(am) + ' €' }); save(); render(); } return; }
     if (el.getAttribute('data-act') === 'col') {
       var tipo = route().q.tipo || 'RQ', cols = (P.cols[tipo] || TYPECOLS[tipo].def).slice(), k = el.getAttribute('data-k');
       if (el.checked && cols.indexOf(k) < 0) { var order = TYPECOLS[tipo].all; cols.push(k); cols.sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); }); }
@@ -2146,6 +2621,9 @@
   });
 
   DB.docs.forEach(function (d) { if (!d.log) d.log = []; });
+  DB.settings = DB.settings || {};
+  if (!DB.settings.approval) DB.settings.approval = { auto: 2500, mgr: 'Direttore tecnico', mgrMax: 25000, top: 'Armatore' };
+  if (!DB.settings.landed) DB.settings.landed = { EU: { pct: 4, min: 60 }, EXTRA: { pct: 8, min: 150 }, ASIA: { pct: 11, min: 250 }, hub: 90, customs: 3 };
   ensureDemo();
   if (!DB.settings && window.SEED.settings) { DB.settings = clone(window.SEED.settings); save(); }
   render();
