@@ -382,7 +382,7 @@
     return '<div class="tablebox"><table class="grid"><thead><tr>' + th + '</tr></thead><tbody>' + tr + '</tbody></table></div>';
   }
   function matchQ(d, q) {
-    if (!q) return true; q = q.toUpperCase();
+    if (!q) return true; q = q.toUpperCase().replace(/\//g, '-');
     return (d.num + ' ' + (d.orig || '') + ' ' + d.desc + ' ' + supName(d.sup)).toUpperCase().indexOf(q) >= 0;
   }
   function pageDocs(q) {
@@ -821,7 +821,7 @@
     return shell('magazzino', crumb([[t('fleet'), '#/'], [shipBy(ship).name, '#/nave/' + ship], [t('stores'), '#/magazzino' + qs({ nave: ship })]]), it.impa || it.pn || 'GI0001', body);
   }
   function nextNum(ship, type) {
-    var y = TODAY.slice(0, 4), pre = ship + '/' + y + '/' + type + '/', n = 0;
+    var y = TODAY.slice(0, 4), pre = ship + '-' + y + '-' + type + '-', n = 0;
     DB.docs.forEach(function (d) { if (d.num && d.num.indexOf(pre) === 0) n = Math.max(n, parseInt(d.num.slice(pre.length), 10) || 0); });
     return pre + ('000' + (n + 1)).slice(-4);
   }
@@ -979,8 +979,12 @@
     rq.lines.forEach(function (l) {
       quoted.forEach(function (r) { var x = rfqLine(r, l.row); if (x && x.quoted) { var v = offerEur(r, x); if (best[l.row] == null || v < best[l.row]) best[l.row] = v; } });
     });
+    var minD = {}, minK = {};
+    rq.lines.forEach(function (l) { quoted.forEach(function (r) { var x = rfqLine(r, l.row); if (!x || !x.quoted) return; if (x.days != null && (minD[l.row] == null || x.days < minD[l.row])) minD[l.row] = x.days; var k = lineDist(r, x); if (k != null && (minK[l.row] == null || k < minK[l.row])) minK[l.row] = k; }); });
+    var bestR = cmpBest(rq, quoted);
     var cols = rfqs.length;
-    var head = '<div style="padding:6px 4px;font-size:12px" class="mute">' + esc(t('l_row')) + '</div>' + rfqs.map(function (r) {
+    var head = '<div style="padding:6px 4px;font-size:12px" class="mute">' + esc(t('l_row')) + '</div>' + rfqs.map(function (r) { return cmpHead(r, bestR); }).join('');
+    var headOld = rfqs.map(function (r) {
       return '<div style="padding:6px 4px;display:flex;flex-direction:column;gap:4px;align-items:flex-start"><a href="#/doc/' + r.id + '" style="font-weight:700;color:var(--ink);text-decoration:none">' + esc(supName(r.sup)) + '</a>' + '<span class="j mute" style="font-size:11px">' + esc(r.num) + ' · ' + esc(r.cur) + (r.offer && r.offer.incoterm ? ' · ' + esc(r.offer.incoterm + (r.offer.place ? ' ' + r.offer.place : '')) : '') + '</span>' + chip(r) + (feat('score') ? scoreBadge(r.sup) : '') + (r.offer && r.offer.via === 'link' ? '<span class="chip c-info" style="font-size:10px">via link</span>' : '') +
         (r.status === 'quotata' ? '<button type="button" class="btn sm" data-act="awardall" data-rfq="' + r.id + '">' + esc(L2(['Scegli tutta l\'offerta', 'Pick whole offer'])) + '</button>' : '') + '</div>';
     }).join('');
@@ -994,8 +998,8 @@
           return '<button type="button" class="cmp-cell' + (on ? ' on' : '') + '" data-act="award" data-row="' + l.row + '" data-rfq="' + r.id + '" aria-pressed="' + on + '" style="margin-top:8px">' +
             '<span style="display:flex;justify-content:space-between;gap:6px"><span class="j" style="font-weight:600">' + money(x.net, r.cur) + '</span><span style="font-size:11px;font-weight:800;color:var(--accText)">' + (on ? esc(L2(['SCELTA', 'SELECTED'])) : '') + '</span></span>' +
             '<span class="j mute" style="font-size:11px">' + nf(x.price) + (x.d1 ? ' −' + nf(x.d1, 0) + '%' : '') + ' /' + esc(l.uom) + ' · ≈ ' + (r.cur === 'USD' ? money(v, 'EUR') : money(v * fx(), 'USD')) + '</span>' +
-            '<span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">' + condChip(x.cond) + '<span class="j" style="font-size:11px">' + (x.days != null ? x.days + ' gg' : '') + '</span>' + (Math.abs(v - best[l.row]) < 0.005 ? '<span style="font-size:11px;font-weight:700;color:var(--teal)">' + esc(L2(['miglior prezzo', 'best price'])) + '</span>' : '') + '</span>' +
-            '<span class="mute" style="font-size:12px">' + esc(x.origin || '') + (x.oqty && x.oqty !== l.qty ? ' · ' + esc(L2(['offre', 'offers'])) + ' ' + nf(x.oqty) : '') + '</span>' + '</button>';
+            '<span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">' + condChip(x.cond) + '<span class="j" style="font-size:11px">' + (x.days != null ? x.days + ' gg' : '') + '</span>' + '</span><span style="display:flex;gap:4px;flex-wrap:wrap">' + (Math.abs(v - best[l.row]) < 0.005 ? '<span class="tag t-price">' + esc(L2(['miglior prezzo', 'best price'])) + '</span>' : '') + (x.days != null && x.days === minD[l.row] && quoted.length > 1 ? '<span class="tag t-fast">' + esc(L2(['più veloce', 'fastest'])) + '</span>' : '') + (lineDist(r, x) != null && lineDist(r, x) === minK[l.row] && quoted.length > 1 ? '<span class="tag t-near">' + esc(L2(['più vicino', 'closest'])) + '</span>' : '') + '</span>' +
+            '<span class="mute" style="font-size:12px">' + esc(x.origin || '') + (lineDist(r, x) != null ? ' · ≈ ' + nf(lineDist(r, x), 0) + ' km' : '') + (x.oqty && x.oqty !== l.qty ? ' · ' + esc(L2(['offre', 'offers'])) + ' ' + nf(x.oqty) : '') + '</span>' + '</button>';
         }).join('');
     }).join('');
     var foot = '<div style="border-top:2px solid var(--ink);padding:10px 4px;font-weight:800">' + esc(L2(['Totale offerta', 'Offer total'])) + '</div>' + rfqs.map(function (r) {
@@ -1011,8 +1015,8 @@
     });
     var aw = Object.keys(sum).map(function (k) { return '<span>' + esc(supName(sum[k].r.sup)) + ' · ' + sum[k].n + ' ' + esc(L2(['righe', 'rows'])) + ' · <span class="j">' + money(sum[k].e, 'EUR') + '</span></span>'; }).join('');
     return '<section class="card stack" id="cmp"><div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px"><h2>' + esc(L2(['Comparazione offerte', 'Quotation comparison'])) + ' <span class="j mute">' + quoted.length + '/' + rfqs.length + '</span></h2>' +
-      '<div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="preset" data-k="price">' + esc(L2(['Miglior prezzo', 'Best price'])) + '</button>' + (feat('landed') ? '<button type="button" class="btn sm" data-act="preset" data-k="landed">' + esc(L2(['Miglior costo a bordo', 'Best landed cost'])) + '</button>' : '') + '<button type="button" class="btn sm ghost" data-act="preset" data-k="none">' + esc(L2(['Azzera', 'Clear'])) + '</button></div></div>' +
-      '<div style="overflow-x:auto"><div class="cmp" style="min-width:' + (180 + cols * 165) + 'px;grid-template-columns:minmax(170px,1.1fr) repeat(' + cols + ',minmax(160px,1fr))">' + head + body + foot + '</div></div>' +
+      '<div>' + portInput(rq) + '</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="mute" style="font-size:12px">' + esc(L2(['Scegli in automatico:', 'Auto pick:'])) + '</span><button type="button" class="btn sm" data-act="preset" data-k="price">' + esc(L2(['Miglior prezzo', 'Best price'])) + '</button><button type="button" class="btn sm" data-act="preset" data-k="fast">' + esc(L2(['Più veloce', 'Fastest'])) + '</button><button type="button" class="btn sm" data-act="preset" data-k="near">' + esc(L2(['Più vicino alla nave', 'Closest to vessel'])) + '</button>' + (feat('landed') ? '<button type="button" class="btn sm" data-act="preset" data-k="landed">' + esc(L2(['Miglior costo a bordo', 'Best landed cost'])) + '</button>' : '') + '<button type="button" class="btn sm ghost" data-act="preset" data-k="none">' + esc(L2(['Azzera', 'Clear'])) + '</button></div>' +
+      '<div style="overflow-x:auto"><div class="cmp" style="min-width:' + (180 + cols * 165) + 'px;grid-template-columns:minmax(170px,1.1fr) repeat(' + cols + ',minmax(170px,1fr))">' + head + body + '</div></div>' +
       (totE ? '<div class="note" style="display:flex;flex-wrap:wrap;gap:6px 22px;color:var(--ink)"><b>' + esc(L2(['Scelta', 'Selection'])) + '</b>' + aw + '<b class="j">' + money(totE, 'EUR') + ' · ' + money(totE * fx(), 'USD') + '</b>' + (totL ? '<span class="j" style="color:var(--accText)">' + esc(L2(['a bordo stimato ', 'landed estimate '])) + money(totL, 'EUR') + '</span>' : '') + '</div>' : '<div class="mute" style="font-size:12px">' + esc(L2(['Clicca un\'offerta per sceglierla riga per riga, oppure usa una proposta automatica.', 'Click an offer to pick it row by row, or use an automatic proposal.'])) + '</div>') + '</section>';
   }
   function preset(rq, k) {
@@ -1024,7 +1028,7 @@
       rfqs.forEach(function (r) {
         var x = rfqLine(r, l.row); if (!x || !x.quoted) return;
         if (k === 'genuine' && x.cond !== 'Genuine') return;
-        var v = k === 'fast' ? (x.days == null ? 999 : x.days) * 1e6 + offerEur(r, x) : k === 'landed' ? offerEur(r, x) * ((landed(r) || { f: 1 }).f) : offerEur(r, x);
+        var v = k === 'near' ? (lineDist(r, x) == null ? 1e9 : lineDist(r, x)) * 1e6 + offerEur(r, x) : k === 'fast' ? (x.days == null ? 999 : x.days) * 1e6 + offerEur(r, x) : k === 'landed' ? offerEur(r, x) * ((landed(r) || { f: 1 }).f) : offerEur(r, x);
         if (bestV == null || v < bestV) { bestV = v; bestR = r; }
       });
       if (bestR) rq.award[l.row] = bestR.id;
@@ -2405,7 +2409,7 @@
         var ids = [].map.call(f.querySelectorAll('input[name=dn]:checked'), function (c) { return c.value; });
         if (!ids.length) { toast(L2(['Scegli almeno una consegna', 'Pick at least one delivery'])); return false; }
         var sh = f.elements.ship.value, n = shipments().filter(function (s) { return s.ship === sh; }).length + 1;
-        var s = { id: 'SHP-' + Date.now(), num: sh + '/' + TODAY.slice(0, 4) + '/SP/' + String(n).padStart(4, '0'), ship: sh, dns: ids, hub: f.elements.hub.value.trim(), port: f.elements.port.value.trim(), etd: f.elements.etd.value, due: f.elements.eta.value, status: 'aperta', track: { stage: 'in_hub', legs: [], events: [] }, costs: [], log: [{ at: TODAY, to: 'aperta', txt: L2(['Creata con ', 'Created with ']) + ids.length + ' DN' }] };
+        var s = { id: 'SHP-' + Date.now(), num: sh + '-' + TODAY.slice(0, 4) + '-SP-' + String(n).padStart(4, '0'), ship: sh, dns: ids, hub: f.elements.hub.value.trim(), port: f.elements.port.value.trim(), etd: f.elements.etd.value, due: f.elements.eta.value, status: 'aperta', track: { stage: 'in_hub', legs: [], events: [] }, costs: [], log: [{ at: TODAY, to: 'aperta', txt: L2(['Creata con ', 'Created with ']) + ids.length + ' DN' }] };
         shipments().push(s);
         ids.forEach(function (id) { var d = byId(id); d.log = d.log || []; d.log.push({ at: TODAY, to: d.status, txt: L2(['Consolidata nella spedizione ', 'Consolidated in shipment ']) + s.num }); });
         save(); location.hash = '#/spedizione/' + s.id;
@@ -2636,6 +2640,65 @@
       '<tr><td class="mute" style="font-size:12px">' + esc(L2(['Predefinito', 'Default'])) + '</td><td>' + inp('invoiceTo.name', T.invoiceTo.name, 220) + '</td><td>' + inp('invoiceTo.address', T.invoiceTo.address, 260) + '</td><td>' + inp('invoiceTo.vat', T.invoiceTo.vat, 130) + '</td><td>' + inp('invoiceTo.email', T.invoiceTo.email, 190) + '</td></tr></tbody></table></div></section>';
   }
 
+
+  /* ---------- comparazione: quadro generale in alto, più veloce, più vicino alla nave ---------- */
+  var PORTS = [
+    ['Genova', 44.41, 8.93, 'genova|genoa'], ['La Spezia', 44.10, 9.83, 'spezia'], ['Livorno', 43.55, 10.30, 'livorno|leghorn'], ['Napoli', 40.84, 14.26, 'napoli|naples'], ['Salerno', 40.67, 14.75, 'salerno'],
+    ['Civitavecchia', 42.09, 11.79, 'civitavecchia'], ['Gioia Tauro', 38.44, 15.90, 'gioia tauro'], ['Taranto', 40.47, 17.21, 'taranto'], ['Bari', 41.13, 16.87, 'bari'], ['Ancona', 43.62, 13.51, 'ancona'],
+    ['Ravenna', 44.42, 12.20, 'ravenna'], ['Venezia', 45.44, 12.33, 'venezia|venice|marghera'], ['Trieste', 45.65, 13.77, 'trieste'], ['Palermo', 38.12, 13.36, 'palermo'], ['Catania', 37.50, 15.09, 'catania'],
+    ['Augusta', 37.23, 15.22, 'augusta'], ['Cagliari', 39.21, 9.11, 'cagliari'], ['Milano', 45.46, 9.19, 'milano|milan'], ['Bologna', 44.49, 11.34, 'bologna'], ['Torino', 45.07, 7.69, 'torino|turin'],
+    ['Malta', 35.82, 14.53, 'malta|valletta|marsaxlokk'], ['Marsiglia', 43.30, 5.37, 'marseille|marsiglia|fos'], ['Barcellona', 41.35, 2.17, 'barcelona|barcellona'], ['Valencia', 39.44, -0.32, 'valencia'], ['Algeciras', 36.13, -5.44, 'algeciras|gibraltar'],
+    ['Pireo', 37.94, 23.64, 'piraeus|pireo|athens|atene'], ['Istanbul', 41.01, 28.98, 'istanbul'], ['Rotterdam', 51.95, 4.14, 'rotterdam'], ['Anversa', 51.26, 4.40, 'antwerp|anversa'], ['Amburgo', 53.55, 9.97, 'hamburg|amburgo'],
+    ['Brema', 53.08, 8.80, 'bremen|brema|bremerhaven'], ['Copenaghen', 55.68, 12.57, 'copenhagen|copenaghen'], ['Danzica', 54.35, 18.65, 'gdansk|danzica'], ['Le Havre', 49.49, 0.11, 'le havre'], ['Southampton', 50.90, -1.40, 'southampton'],
+    ['Pusan', 35.10, 129.04, 'busan|pusan|korea|corea'], ['Shanghai', 31.23, 121.47, 'shanghai|china|cina'], ['Singapore', 1.26, 103.84, 'singapore'], ['Hong Kong', 22.30, 114.17, 'hong kong'], ['Tokyo', 35.65, 139.77, 'tokyo|yokohama|japan|giappone'],
+    ['Dubai', 25.27, 55.30, 'dubai|jebel ali|uae'], ['Mumbai', 18.95, 72.84, 'mumbai|india'], ['Houston', 29.73, -95.27, 'houston|usa'], ['Port Said', 31.26, 32.30, 'port said|suez'], ['Algeri', 36.77, 3.06, 'algiers|algeri']
+  ];
+  function findPort(txt) { txt = (txt || '').toLowerCase(); if (!txt) return null; var best = null, bi = -1; PORTS.forEach(function (p) { var re = new RegExp('\\b(' + p[3] + ')', 'g'), m; while ((m = re.exec(txt))) { if (m.index > bi) { bi = m.index; best = p; } } }); return best; }
+  function km(a, b) { var R = 6371, r = Math.PI / 180, dLa = (b[1] - a[1]) * r, dLo = (b[2] - a[2]) * r, h = Math.sin(dLa / 2) * Math.sin(dLa / 2) + Math.cos(a[1] * r) * Math.cos(b[1] * r) * Math.sin(dLo / 2) * Math.sin(dLo / 2); return Math.round(2 * R * Math.asin(Math.sqrt(h))); }
+  function shipPort(ship) { var s = shipBy(ship); return s && s.nextPort ? findPort(s.nextPort.name) : null; }
+  function lineDist(r, x) { var sp = shipPort(r.ship); if (!sp) return null; var p = findPort(x.origin) || findPort((r.offer || {}).place); return p ? km(p, sp) : null; }
+  function offerSummary(r) {
+    var q = r.lines.filter(function (x) { return x.quoted; }), lts = q.map(function (x) { return x.days; }).filter(function (v) { return v != null; });
+    var conds = {}; q.forEach(function (x) { if (x.cond) conds[x.cond] = (conds[x.cond] || 0) + 1; });
+    var origs = []; q.forEach(function (x) { var o = (x.origin || '').trim(); if (o && origs.indexOf(o) < 0) origs.push(o); });
+    var ds = q.map(function (x) { return lineDist(r, x); }).filter(function (v) { return v != null; });
+    return { cov: q.length, lt0: lts.length ? Math.min.apply(null, lts) : null, lt1: lts.length ? Math.max.apply(null, lts) : null, conds: conds, origs: origs, dist: ds.length ? Math.max.apply(null, ds) : null };
+  }
+  function cmpHead(r, best) {
+    var top = '<a href="#/doc/' + r.id + '" style="font-weight:700;color:var(--ink);text-decoration:none">' + esc(supName(r.sup)) + '</a><span class="j mute" style="font-size:11px">' + esc(r.num) + ' · ' + esc(r.cur) + '</span>' +
+      '<span style="display:flex;gap:4px;flex-wrap:wrap">' + chip(r) + (r.offer && r.offer.via === 'link' ? '<span class="chip c-info" style="font-size:10px">via link</span>' : '') + '</span>';
+    if (r.status !== 'quotata') return '<div class="cmp-head">' + top + '</div>';
+    var s = offerSummary(r), o = r.offer || {}, eur = toEur(r.total, r.cur);
+    var tags = (best.price === r.id ? '<span class="tag t-price">' + esc(L2(['miglior prezzo', 'best price'])) + '</span>' : '') + (best.fast === r.id ? '<span class="tag t-fast">' + esc(L2(['più veloce', 'fastest'])) + '</span>' : '') + (best.near === r.id ? '<span class="tag t-near">' + esc(L2(['più vicino alla nave', 'closest to vessel'])) + '</span>' : '');
+    var row = function (l, v) { return '<span class="kvr"><span>' + esc(l) + '</span><b>' + v + '</b></span>'; };
+    return '<div class="cmp-head">' + top +
+      '<span class="j" style="font-size:17px;font-weight:700;margin-top:2px">' + money(r.total, r.cur) + '</span><span class="j mute" style="font-size:11px">≈ ' + (r.cur === 'USD' ? money(eur, 'EUR') : money(toUsd(r.total, 'EUR'), 'USD')) + ' · ' + esc(L2(['copertura', 'coverage'])) + ' ' + s.cov + '/' + r.lines.length + ((r.charges || []).some(function (c) { return c.amount; }) ? ' · ' + esc(L2(['spese incl.', 'charges incl.'])) : '') + '</span>' +
+      (tags ? '<span style="display:flex;gap:4px;flex-wrap:wrap">' + tags + '</span>' : '') +
+      '<span class="kvbox">' + row('Incoterm', esc(o.incoterm || '—')) + row(L2(['Luogo di resa', 'Place']), esc(o.place || '—')) +
+      row(L2(['Lead time', 'Lead time']), s.lt0 == null ? '—' : s.lt0 === s.lt1 ? s.lt0 + ' gg' : s.lt0 + '–' + s.lt1 + ' gg') +
+      row(L2(['Condizione', 'Condition']), Object.keys(s.conds).map(function (c) { return esc(c === 'Usato' ? L2(['Usato', 'Used']) : c) + (Object.keys(s.conds).length > 1 ? ' ' + s.conds[c] : ''); }).join(' · ') || '—') +
+      row(L2(['Origine / stock', 'Origin / stock']), esc(s.origs.slice(0, 2).join(', ') + (s.origs.length > 2 ? ' +' + (s.origs.length - 2) : '') || '—')) +
+      (s.dist != null ? row(L2(['Dalla nave', 'From vessel']), '≈ ' + nf(s.dist, 0) + ' km') : '') +
+      (o.validTo ? row(L2(['Valida fino al', 'Valid until']), fd(o.validTo)) : '') + '</span>' +
+      (feat('landed') ? landedFoot(r) : '') +
+      '<button type="button" class="btn sm" data-act="awardall" data-rfq="' + r.id + '" style="margin-top:4px">' + esc(L2(['Scegli tutta l\'offerta', 'Pick whole offer'])) + '</button></div>';
+  }
+  function cmpBest(rq, quoted) {
+    var b = {}, bp = null, bf = null, bn = null;
+    quoted.forEach(function (r) {
+      var s = offerSummary(r), e = toEur(r.total, r.cur) * (r.lines.length / Math.max(1, s.cov));
+      if (bp == null || e < bp) { bp = e; b.price = r.id; }
+      if (s.lt1 != null && (bf == null || s.lt1 < bf)) { bf = s.lt1; b.fast = r.id; }
+      if (s.dist != null && (bn == null || s.dist < bn)) { bn = s.dist; b.near = r.id; }
+    });
+    return b;
+  }
+  function portInput(rq) {
+    var s = shipBy(rq.ship), np = s.nextPort || {}, p = findPort(np.name);
+    return '<label class="tog" style="gap:6px">' + esc(L2(['Prossimo porto ', 'Next port '])) + esc(s.code) + ' <input list="portlist" data-nextport="' + s.code + '" value="' + esc(np.name || '') + '" placeholder="' + esc(L2(['es. Ravenna', 'e.g. Ravenna'])) + '" style="width:120px;border:0;background:transparent"><input type="date" data-nexteta="' + s.code + '" value="' + esc(np.eta || '') + '" style="border:0;background:transparent" aria-label="ETA">' +
+      (np.name && !p ? '<span class="t-warn" style="font-size:11px">' + esc(L2(['porto non riconosciuto', 'port not recognised'])) + '</span>' : '') + '</label><datalist id="portlist">' + PORTS.map(function (x) { return '<option value="' + x[0] + '">'; }).join('') + '</datalist>';
+  }
+
   /* ---------- render & events ---------- */
   function render() {
     var r = route(), s = r.seg, html;
@@ -2736,6 +2799,7 @@
     if (el.getAttribute('data-plf')) { var pp = el.getAttribute('data-plf').split('|'), pw = whOf(pp[0]); if (pw) { pw.placements[+pp[1]][pp[2]] = el.value.trim(); save(); toast(L2(['Salvato', 'Saved'])); } return; }
     if (el.getAttribute('data-pldef')) { var pd = el.getAttribute('data-pldef').split('|'), dw = whOf(pd[0]); dw.placements.forEach(function (x, k) { x.default = k === +pd[1]; }); save(); render(); return; }
     if (el.getAttribute('data-plcan')) { var pc2 = el.getAttribute('data-plcan').split('|'), cw = whOf(pc2[0]); cw.placements[+pc2[1]].cancelled = el.checked; save(); render(); return; }
+    if (el.getAttribute('data-nextport') || el.getAttribute('data-nexteta')) { var nsh = shipBy(el.getAttribute('data-nextport') || el.getAttribute('data-nexteta')); nsh.nextPort = nsh.nextPort || {}; if (el.getAttribute('data-nextport')) nsh.nextPort.name = el.value.trim(); else nsh.nextPort.eta = el.value; save(); render(); toast(L2(['Prossimo porto aggiornato', 'Next port updated'])); return; }
     if (el.getAttribute('data-aset')) { aset(el.getAttribute('data-aset'), parseNum(el.value)); toast(L2(['Parametro salvato', 'Parameter saved'])); return; }
     if (el.getAttribute('data-asett')) { aset(el.getAttribute('data-asett'), el.value.trim()); toast(L2(['Parametro salvato', 'Parameter saved'])); return; }
     if (el.getAttribute('data-shpcost')) { var sp = shpById(route().seg[1]); if (sp) { var kk = el.getAttribute('data-shpcost'), am = parseNum(el.value); sp.costs = (sp.costs || []).filter(function (c) { return c.kind !== kk; }); if (am) sp.costs.push({ kind: kk, amount: am }); sp.log.push({ at: TODAY, to: sp.status, txt: L2(['Costo ', 'Cost ']) + kk + ' ' + nf(am) + ' €' }); save(); render(); } return; }
@@ -2785,7 +2849,8 @@
     if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) { var s = document.getElementById('gsearch'); if (s) { s.focus(); s.select(); e.preventDefault(); } }
   });
 
-  DB.docs.forEach(function (d) { if (!d.log) d.log = []; });
+  DB.docs.forEach(function (d) { if (!d.log) d.log = []; if (d.num && d.num.indexOf('/') >= 0) d.num = d.num.replace(/\//g, '-'); });
+  (DB.shipments || []).forEach(function (x) { x.num = x.num.replace(/\//g, '-'); });
   if (!DB.warehouses && window.SEED.warehouses) { DB.warehouses = clone(window.SEED.warehouses); save(); }
   DB.settings = DB.settings || {};
   if (!DB.settings.approval) DB.settings.approval = { auto: 2500, mgr: 'Direttore tecnico', mgrMax: 25000, top: 'Armatore' };
