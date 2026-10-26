@@ -241,3 +241,4 @@ table.grid td a[href^="#/fornitore"]{display:inline-block;min-width:140px}
 .t-price{background:var(--tealSoft);color:var(--teal)}
 .t-fast{background:var(--amberSoft);color:var(--amber)}
 .t-near{background:var(--greenSoft);color:var(--green)}
+.card.stack > label.stack{flex:0 0 auto !important}
