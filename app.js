@@ -2857,6 +2857,12 @@
     if (DB.settings.company && window.SEED.settings.company) DB.settings.company.name = window.SEED.settings.company.name;
     save();
   }
+  if (window.SEED.settings && window.SEED.settings.invoiceToShip && DB.settings && DB.settings.invoiceToShip && DB.settings.invMig !== 2) {
+    var SI = window.SEED.settings;
+    Object.keys(SI.invoiceToShip).forEach(function (k) { var d = DB.settings.invoiceToShip[k] = DB.settings.invoiceToShip[k] || clone(SI.invoiceToShip[k]); d.email = SI.invoiceToShip[k].email; if (!d.vat) d.vat = SI.invoiceToShip[k].vat; });
+    if (DB.settings.invoiceTo) { DB.settings.invoiceTo.email = SI.invoiceTo.email; if (!DB.settings.invoiceTo.vat) DB.settings.invoiceTo.vat = SI.invoiceTo.vat; }
+    DB.settings.invMig = 2; save();
+  }
   if (!DB.warehouses && window.SEED.warehouses) { DB.warehouses = clone(window.SEED.warehouses); save(); }
   DB.settings = DB.settings || {};
   if (!DB.settings.approval) DB.settings.approval = { auto: 2500, mgr: 'Direttore tecnico', mgrMax: 25000, top: 'Armatore' };
