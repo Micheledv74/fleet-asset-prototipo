@@ -2851,6 +2851,12 @@
 
   DB.docs.forEach(function (d) { if (!d.log) d.log = []; if (d.num && d.num.indexOf('/') >= 0) d.num = d.num.replace(/\//g, '-'); });
   (DB.shipments || []).forEach(function (x) { x.num = x.num.replace(/\//g, '-'); });
+  if (window.SEED.settings && window.SEED.settings.invoiceToShip && !(DB.settings && DB.settings.invoiceToShip)) {
+    DB.settings = DB.settings || {}; DB.settings.invoiceToShip = clone(window.SEED.settings.invoiceToShip);
+    if (!DB.settings.invoiceTo || /RED CORAL/i.test(DB.settings.invoiceTo.name || '')) DB.settings.invoiceTo = clone(window.SEED.settings.invoiceTo);
+    if (DB.settings.company && window.SEED.settings.company) DB.settings.company.name = window.SEED.settings.company.name;
+    save();
+  }
   if (!DB.warehouses && window.SEED.warehouses) { DB.warehouses = clone(window.SEED.warehouses); save(); }
   DB.settings = DB.settings || {};
   if (!DB.settings.approval) DB.settings.approval = { auto: 2500, mgr: 'Direttore tecnico', mgrMax: 25000, top: 'Armatore' };
