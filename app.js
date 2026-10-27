@@ -307,9 +307,9 @@
   }
   function shipCard(s) {
     var head = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div><h2>' + esc(s.name) + '</h2><span class="mute" style="font-size:12px">' + esc(t('kind_' + s.kind)) + '</span></div><span class="code j">' + s.code + '</span></div>';
-    if (!s.infoship) return '<article class="ship">' + head + '<div class="empty">' + esc(t('noData')) + '</div><a class="btn" style="align-self:flex-start" href="#/nave/' + s.code + '">' + esc(t('openShip')) + ' →</a></article>';
+    if (!s.infoship) return '<article class="ship">' + head + certPill(s.code) + '<div class="empty">' + esc(t('noData')) + '</div><a class="btn" style="align-self:flex-start" href="#/nave/' + s.code + '">' + esc(t('openShip')) + ' →</a></article>';
     var k = kpiShip(s.code);
-    return '<article class="ship">' + head + phaseBoxes(s.code, true) + shipBudgetBlock(s.code) +
+    return '<article class="ship">' + head + phaseBoxes(s.code, true) + certPill(s.code) + shipBudgetBlock(s.code) +
       '<a class="btn" style="align-self:flex-start;font-weight:700" href="#/nave/' + s.code + '">' + esc(t('openShip')) + ' →</a></article>';
   }
 
@@ -317,11 +317,11 @@
     var s = shipBy(code); if (!s) return pageHome();
     var body;
     if (!s.infoship) {
-      body = '<div class="card"><div class="empty">' + esc(t('noData')) + '</div></div>';
+      body = certPill(code) + '<div class="card"><div class="empty">' + esc(t('noData')) + '</div></div>';
     } else {
       var k = kpiShip(code);
       var rec = docs(function (d) { return d.ship === code; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 12);
-      body = phaseBoxes(code) +
+      body = phaseBoxes(code) + certPill(code) +
         '<div class="row"><div class="grow stack">' + (DB.budgets[code] ? '<a class="card stack" href="#/budget?nave=' + code + '" style="text-decoration:none;color:var(--ink);max-width:560px"><h2 style="margin:0">' + esc(t('budget')) + ' 2026</h2>' + shipBudgetBlock(code) + '</a>' : '') +
         '<h2 style="margin:8px 0 0;font-size:15px">' + esc(t('recent')) + '</h2>' + gridTable(rec, ['num', 'type', 'desc', 'status', 'sup', 'date'], null, null) + '</div></div>';
     }
@@ -2518,6 +2518,7 @@
       ['#/', 'fleet', t('fleet'), active === 'home' || active === 'ship'],
       ['#/docs' + qs({ tipo: 'PR', nave: ship }), 'cart', t('purchasing'), k === 'acq'],
       ['#/logistica' + qs({ nave: ship }), 'box', L2(['Logistica', 'Logistics']), k === 'log' || active === 'logistica'],
+      ['#/certificati' + qs({ nave: ship }), 'cal', L2(['Certificati', 'Certificates']), active === 'certificati'],
       ['#/' + (P.seat === 'acc' ? 'contabilita' : 'budget' + qs({ nave: ship || 'PEP' })), 'chart', t('budget'), k === 'bud']
     ];
     return '<nav class="rail" aria-label="' + esc(t('fleet')) + '"><div class="brand">' + esc(ship || 'FLEET') + '</div>' + E.map(function (e) { return railLink(e[0], e[1], e[2], e[3]); }).join('') +
@@ -2859,12 +2860,14 @@
     return readSheets(f).then(function (sh) {
       var r = sh[0].rows; if (!r.length) throw new Error('vuoto');
       var h = (r[0] || []).map(function (x) { return xStr(x); });
+      if (r.slice(0, 6).some(function (x) { return (x || []).some(function (y) { return /DOCUMENTS\s*-\s*CERTIFICATES/i.test(String(y || '')); }); })) return f.arrayBuffer().then(function (buf) { var raw = ''; try { raw = new TextDecoder('windows-1252').decode(buf); } catch (e) {} return planCerts(r, raw, f.name); });
       if (h.indexOf('Number') >= 0 && h.indexOf('ID') >= 0 && h.indexOf('Status') >= 0) return planDocs(r, f.name, pend);
       var b = planBudget(r, f.name); if (b) return b;
       throw new Error(L2(['formato non riconosciuto', 'unknown format']));
     });
   }
-  function planHtml(P) {
+  function planHtml(P, i) {
+    if (P.kind === 'certs') return planCertsHtml(P, i);
     if (P.err) return '<div class="t-bad">' + esc(P.file + ': ' + P.err) + '</div>';
     if (P.kind === 'docs') {
       var bt = function (arr) { var c = {}; arr.forEach(function (o) { c[o.type] = (c[o.type] || 0) + 1; }); return Object.keys(c).map(function (k) { return k + ' ' + c[k]; }).join(' · ') || '0'; };
@@ -2891,10 +2894,11 @@
     arr.reduce(function (pr, f) { return pr.then(function (acc) { return planFile(f, pend).catch(function (e) { return { file: f.name, err: e.message || String(e) }; }).then(function (P) { acc.push(P); return acc; }); }); }, Promise.resolve([])).then(function (plans) {
       formModal(L2(['Aggiornamento dati', 'Data update']), '<div class="stack" style="gap:12px">' + plans.map(planHtml).join('<hr style="border:0;border-top:1px solid var(--line);width:100%">') + '</div>' +
         '<div class="mute" style="font-size:12px">' + esc(L2(['InfoSHIP aggiorna testata e stato dei documenti. Righe, allegati, tracking, scelte di comparazione e documenti creati nel prototipo restano come sono. Puoi caricare file parziali: si aggiorna solo quello che contengono.', 'InfoSHIP updates header and status. Lines, attachments, tracking and prototype documents are kept. Partial files are fine.'])) + '</div>',
-        function () {
+        function (fm) {
           var at = TODAY, rep = [];
-          plans.forEach(function (P) {
+          plans.forEach(function (P, pi) {
             if (P.err) return;
+            if (P.kind === 'certs') { var cs = fm.querySelector('[name=cship-' + pi + ']'), co = applyCerts(P, cs && cs.value); rep.push(P.file + ': ' + (co ? L2(['certificati ', 'certificates ']) + cs.value + ' +' + co.add + ' / ~' + co.upd : L2(['nave non scelta, file non applicato', 'no vessel chosen, file skipped']))); return; }
             if (P.kind === 'full') { DB = P.data; rep.push('full'); return; }
             if (P.kind === 'docs') { applyDocs(P, at); rep.push(P.file + ': +' + P.add.length + ' / ~' + P.upd.length); }
             if (P.kind === 'budget') { applyBudget(P); rep.push(P.file + ': budget ' + P.ship); }
@@ -2908,7 +2912,7 @@
   function importCard() {
     var h = (DB.imports || []).slice(0, 8);
     return '<section class="card stack"><h2>' + esc(L2(['Aggiorna da InfoSHIP e dalla dashboard', 'Update from InfoSHIP and the dashboard'])) + '</h2>' +
-      '<div style="font-size:13px">' + esc(L2(['Carica uno o più file insieme: export lista documenti di InfoSHIP (.xlsx, anche parziali o di un solo tipo), export RFQ o PO con la colonna Total, report budget nave (.xls), backup della dashboard operativa (.json). Prima di applicare vedi cosa cambia.', 'Upload one or more files: InfoSHIP document list exports, RFQ/PO exports with Total, vessel budget report, dashboard backup. You see the changes before applying.'])) + '</div>' +
+      '<div style="font-size:13px">' + esc(L2(['Carica uno o più file insieme: export lista documenti di InfoSHIP (.xlsx, anche parziali o di un solo tipo), export RFQ o PO con la colonna Total, report budget nave (.xls), liste certificati DOC F01 (.xls), backup della dashboard operativa (.json). Prima di applicare vedi cosa cambia.', 'Upload one or more files: InfoSHIP document list exports, RFQ/PO exports with Total, vessel budget report, DOC F01 certificate lists (.xls), dashboard backup. You see the changes before applying.'])) + '</div>' +
       '<label class="btn pri" style="align-self:flex-start">' + esc(L2(['Scegli i file…', 'Choose files…'])) + '<input type="file" multiple accept=".xlsx,.xls,.json" data-act="impfiles" hidden></label>' +
       (h.length ? '<div class="log">' + h.map(function (x) { return '<div><span class="j">' + esc(x.at) + '</span><span>' + esc(x.txt) + '</span></div>'; }).join('') + '</div>' : '') + '</section>';
   }
@@ -3069,6 +3073,317 @@
     return { subj: subj, body: body, to: sp.email || '', name: pdfName(d) };
   }
 
+  /* ---- Certificati: lettura del modello DOC F01 ---- */
+  var CERT_WHO = ['Master', 'Dir. macchina', 'Supt. tecnico', 'Supt. marine', 'RINA', 'Bandiera', 'Ditta', 'Acquisto', 'Agenzia', 'Ufficio', 'P&I', 'Porto'];
+  function cPad(n) { return (n < 10 ? '0' : '') + n; }
+  function cDate(v) {
+    if (v == null || v === '') return { d: null, t: null };
+    if (typeof v === 'number') { if (v < 20000 || v > 60000) return { d: null, t: String(v) }; var d = new Date(Math.round((v - 25569) * 864e5)); return { d: d.getUTCFullYear() + '-' + cPad(d.getUTCMonth() + 1) + '-' + cPad(d.getUTCDate()), t: null }; }
+    var s = String(v).trim(); if (!s) return { d: null, t: null };
+    var m = s.match(/^(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})$/);
+    if (m && +m[2] >= 1 && +m[2] <= 12 && +m[1] >= 1 && +m[1] <= 31) return { d: m[3] + '-' + cPad(+m[2]) + '-' + cPad(+m[1]), t: null };
+    m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return { d: m[0], t: null };
+    m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{2})$/); if (m && +m[2] <= 12) return { d: '20' + m[3] + '-' + cPad(+m[2]) + '-' + cPad(+m[1]), t: null };
+    return { d: null, t: s };
+  }
+  function cStr(v) { if (v == null) return ''; if (typeof v === 'number') return String(Math.round(v * 1000) / 1000); return String(v).replace(/\s+/g, ' ').trim(); }
+  function cPeriod(notes) {
+    var s = String(notes || ''), m;
+    if (/permanent/i.test(s) && !/yearly|years?|months?/i.test(s.replace(/permanent/i, ''))) return 0;
+    if ((m = s.match(/(\d+)\s*months?/i))) return +m[1];
+    if ((m = s.match(/(\d+)\s*(?:e)?y[e]?ars?/i))) return +m[1] * 12;
+    if (/yearly|annual/i.test(s)) return 12;
+    if (/permanent/i.test(s)) return 0;
+    return null;
+  }
+  function certClass(name, sec) {
+    var n = String(name || '').toUpperCase(), g, k, w;
+    if (/MASTER CABIN/.test(sec || '')) return { grp: 'man', kind: 'adm', who: 'Master' };
+    if (/INSURANCE|P ?& ?I |P&I|CLC|NAIROBI|NCWR|COFR|H ?& ?M|HULL AND MACHINERY|TONNAGE TAX/.test(n)) g = 'ins';
+    else if (/CLASS|LOAD LINE|SAFETY EQUIPMENT CERT|SAFETY RADIO CERT|CONSTRUCTION|POLLUTION PREVENTION|IOPP|IAPP|ISPP|BALLAST WATER MANAGEMENT|IHM|HAZARDOUS|ANTI-?FOULING|ANTIFOULING|TONNAGE CERT|REGISTRY|DANGEROUS GOODS|SOLID CARGOES|GRAIN|ENERGY EFFICIENCY|EIAPP|IMO DCS|EMISSIONS|RECORD OF SAFETY|RECORD FORM|^EXEMPTION|ASSIGNEMENT|ASSIGNMENT|CARGO GEAR|LOADING COMPUTER|LOADING TEST|RIGGING|SEEMP|DECLARATION OF CONFORMITY|STATEMENT FOR VGP|ANTIFOULING PAINT|SUPPLEMENT TO IOPP|RECORD FOR THE CARRIAGE|CARRIAGE OF 12|ARMY|ASBESTOS/.test(n)) g = 'flag';
+    else if (/SAFETY MANAGEMENT|DOCUMENT OF COMPLIANCE \(DOC\)|COMPANY DOCUMENT|SECURITY CERT|ISSP|ISSC|MLC|MARITIME LABOU?R|CREW ACCOMMODATION|MANNING|ITF|SYNOPSIS|DRUG|ALCOHOL|RUOLO|I\.P\.S\.E\.M\.A/.test(n)) g = 'ism';
+    else if (/MEDICAL CHEST|SANITATION|FRESH WATER|WATER ANALYSIS|SEWAGE ANALYSIS|PURIFIED SEWAGE|ANALYSIS OF BALLAST/.test(n)) g = 'health';
+    else if (/RADIO|EPIRB|SART|A\.I\.S|\bAIS\b|SSAS|VDR|ECDIS|LRIT|BNWAS|GYRO|COMPASS|CHARTS|GMDSS|SHORE BASED|HRU/.test(n)) g = 'radio';
+    else if (/LIFEBOAT|LIFERAFT|RESCUE|FIRE|EXTING|FOAM|CO2|BREATHING|B\.A\.|EEBD|OXYG|IMMERSION|LINE THROWING|SIGNAL|FLARE|LIFEJACKET|PILOT LADDER|EMBARKATION|FREE FALL|GAS (?:INSTR|DETECT)|DETECTOR|DAVIT|SMOKE|\bRATIONS?\b|DRINKING|SEASICK|FIRST AID|WIRE|RED STAR|GALLEY|BTLS|DRY POW|HYDR/.test(n)) g = 'safe';
+    else g = 'oth';
+    if (/SIGNAL|FLARE|\bRATIONS?\b|DRINKING WATER|SEASICK|FIRST AID KIT|BATTER|LIFEJACKETS LIGHTS|HRU|CHARTS|RED STAR|MEDICAL CHEST|WIRES? RENEW|ROCKET/.test(n)) k = 'sup';
+    else if (g === 'ins' || /REGISTRY|MANNING|ITF|SYNOPSIS|RADIO STATION LICENCE|TONNAGE TAX|RUOLO|ANCHOR DUES/.test(n)) k = 'adm';
+    else if (g === 'flag' || g === 'ism') k = 'svy';
+    else k = 'srv';
+    if (k === 'sup') w = 'Acquisto';
+    else if (g === 'ins') w = 'P&I';
+    else if (k === 'adm') w = 'Bandiera';
+    else if (g === 'flag') w = 'RINA';
+    else if (g === 'ism') w = 'Supt. marine';
+    else if (/SANITATION/.test(n)) w = 'Agenzia';
+    else if (/FRESH WATER|WATER ANALYSIS|DECLARATION|PORT STATE/.test(n)) w = 'Master';
+    else if (/SEWAGE|CO2 FIXED|FIXED SYS|FIXED CO2|OWS|ODME|GAS DETECT|COMPRESSOR|CRANE|WINCH|BUNKER/.test(n)) w = 'Dir. macchina';
+    else w = 'Ditta';
+    return { grp: g, kind: k, who: w };
+  }
+  function certKey(no, name) { return (String(no || '').replace(/\s+/g, '').toUpperCase() || 'X') + '|' + String(name || '').toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 40); }
+  function certShipName(raw) {
+    var m = String(raw || '').match(/M\/?V\.?\s+_?([A-Z][A-Z0-9 ]*?[A-Z0-9])_?\s*(?:&|\s{2}|\d|$)/);
+    return m ? m[1].replace(/\s+/g, ' ').trim() : null;
+  }
+  function parseF01(rows, raw) {
+    var h = -1;
+    for (var i = 0; i < Math.min(rows.length, 6); i++) if ((rows[i] || []).some(function (x) { return /DOCUMENTS\s*-\s*CERTIFICATES/i.test(String(x || '')); })) { h = i; break; }
+    if (h < 0) return null;
+    var ref = cDate((rows[h] || [])[10]).d, out = [], last = null, sec = '', seen = {};
+    for (var r = h + 1; r < rows.length; r++) {
+      var R = rows[r] || [], no = cStr(R[0]).replace(/\.0$/, ''), name = cStr(R[2]);
+      if (!name) continue;
+      var iss = cDate(R[3]), exp = cDate(R[4]), place = cStr(R[7]), num = cStr(R[8]).replace(/\.0$/, ''), notes = cStr(R[9]);
+      var isSvy = last && /^(annual|intermediate)/i.test(name) && !/certificate|report|test|check|davit|lifeboat|liferaft|rescue/i.test(name);
+      if (isSvy) { last.surveys.push({ name: name, date: iss.d, due: exp.d, place: place }); continue; }
+      if (!no && !iss.d && !iss.t && !exp.d && !exp.t && !place && !num && !notes && sec !== 'MASTER CABIN' && /^(BRIDGE|LIFEBOAT|MASTER CABIN|ENGINE|DECK|GALLEY)/.test(name)) { sec = name; continue; }
+      var cl = certClass(name, sec), key = certKey(no, name);
+      if (seen[key]) key += '#' + (++seen[key]); else seen[key] = 1;
+      var c = { key: key, no: no, name: name, sec: sec, grp: cl.grp, kind: cl.kind, who: cl.who, issue: iss.d, expiry: exp.d, txt: iss.t || null, bad: exp.t || null, place: place, num: num, notes: notes, period: cPeriod(notes), surveys: [] };
+      if (c.issue && c.expiry) { var mo = Math.round((Date.parse(c.expiry) - Date.parse(c.issue)) / (864e5 * 30.44)); if (mo > 0 && mo <= 120) c.period = mo; }
+      out.push(c); last = c;
+    }
+    return { ref: ref, shipName: certShipName(raw), list: out };
+  }
+
+  /* =====================================================================
+     CERTIFICATI: scadenze per nave, azione a un clic (RQ), aggiornamento
+     ===================================================================== */
+  var CG = [['flag', ['Bandiera e classe', 'Flag and class']], ['ism', ['ISM · ISPS · MLC', 'ISM · ISPS · MLC']], ['ins', ['Assicurazioni', 'Insurance']], ['radio', ['Radio e navigazione', 'Radio and navigation']],
+    ['safe', ['Salvataggio e antincendio', 'Life-saving and fire-fighting']], ['health', ['Sanità e acqua', 'Health and water']], ['oth', ['Ponte e varie', 'Deck and other']], ['man', ['Manuali e piani', 'Manuals and plans']]];
+  var CK = { svy: ['Visita ente', 'Survey'], srv: ['Servizio a bordo', 'On-board service'], sup: ['Fornitura', 'Supply'], adm: ['Rinnovo amministrativo', 'Admin renewal'] };
+  var CST = { bad: ['Scaduto', 'Expired', 'c-bad'], w30: ['Entro 30 gg', 'Within 30 d', 'c-warn'], w90: ['Entro 90 gg', 'Within 90 d', 'c-info'], ok: ['In regola', 'Valid', 'c-ok'], perm: ['Permanente', 'Permanent', 'c-neutral'], info: ['Senza scadenza', 'No expiry', 'c-neutral'], empty: ['Da compilare', 'To fill in', 'c-neutral'] };
+  function cgName(g) { for (var i = 0; i < CG.length; i++) if (CG[i][0] === g) return L2(CG[i][1]); return g; }
+  function addMonths(iso, n) { var p = iso.split('-').map(Number), d = new Date(Date.UTC(p[0], p[1] - 1 + n, 1)), last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate(); return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(Math.min(p[2], last)); }
+  function certsOf(ship) { return (DB.certs || []).filter(function (c) { return !ship || c.ship === ship; }); }
+  function certById(id) { var a = DB.certs || []; for (var i = 0; i < a.length; i++) if (a[i].id === id) return a[i]; return null; }
+  function certNext(c) {
+    var cands = [];
+    if (c.expiry) cands.push({ due: c.expiry, what: 'exp' });
+    else if (c.issue && c.period > 0) cands.push({ due: addMonths(c.issue, c.period), what: 'calc' });
+    (c.surveys || []).forEach(function (s) {
+      if (s.due) { cands.push({ due: s.due, what: 'svy', s: s }); return; }
+      if (!c.expiry || !c.issue) return;
+      var yrs = Math.round(daysBetween(c.issue, c.expiry) / 365.25);
+      for (var k = yrs - 1; k >= 1; k--) {
+        var A = addMonths(c.expiry, -12 * k), op = addMonths(A, -3), cl = addMonths(A, 3);
+        if (s.date && s.date >= op) continue;
+        if (!s.date && cl < TODAY) continue;
+        cands.push({ due: cl, open: op, what: 'svy', s: s, nd: !s.date }); break;
+      }
+    });
+    cands.sort(function (a, b) { return a.due < b.due ? -1 : 1; });
+    var n = cands[0] || null, st, days = null;
+    if (!n) st = (c.period === 0 || /permanent/i.test(c.notes || '') || (c.grp === 'man' && c.txt && !/n\/?a|nil/i.test(c.txt))) ? 'perm' : (c.issue || c.txt) ? 'info' : 'empty';
+    else { days = daysBetween(TODAY, n.due); st = days < 0 ? 'bad' : days <= 30 ? 'w30' : days <= 90 ? 'w90' : 'ok'; }
+    return { n: n, st: st, days: days, nd: !!(c.bad || (n && n.nd)) };
+  }
+  function certCount(list) {
+    var o = { bad: 0, w30: 0, w90: 0, ok: 0, perm: 0, info: 0, empty: 0, nd: 0, tot: list.length };
+    list.forEach(function (c) { var x = certNext(c); o[x.st]++; if (x.nd) o.nd++; });
+    o.att = o.bad + o.w30 + o.w90; return o;
+  }
+  function certPill(code) {
+    var L = certsOf(code); if (!L.length) return '';
+    var o = certCount(L), parts = [];
+    if (o.bad) parts.push(o.bad + ' ' + L2(['scaduti', 'expired']));
+    if (o.w30) parts.push(o.w30 + ' ' + L2(['entro 30 gg', 'within 30 d']));
+    if (o.w90 && parts.length < 2) parts.push(o.w90 + ' ' + L2(['entro 90 gg', 'within 90 d']));
+    var tone = o.bad ? 'c-bad' : o.w30 ? 'c-warn' : o.w90 ? 'c-info' : 'c-ok';
+    return '<a class="chip ' + tone + '" style="text-decoration:none;align-self:flex-start" href="#/certificati' + qs({ nave: code }) + '">' + esc(L2(['Certificati', 'Certificates'])) + ': ' + esc(parts.join(' · ') || L2(['in regola', 'all valid'])) + '</a>';
+  }
+  function certCell(list, href) {
+    if (!list.length) return '<td class="mute" style="text-align:center">—</td>';
+    var o = certCount(list), tone = o.bad ? 'bad' : o.w30 ? 'warn' : o.w90 ? 'info' : 'ok';
+    var sub = [o.bad ? o.bad + ' ' + L2(['scad.', 'exp.']) : '', o.w30 ? o.w30 + ' ≤30' : '', o.w90 ? o.w90 + ' ≤90' : ''].filter(Boolean).join(' · ');
+    return '<td class="cgc cg-' + tone + '"><a href="' + href + '"><b class="j">' + (o.att || '✓') + '</b><span>' + esc(sub || (o.tot + ' ' + L2(['voci', 'items']))) + '</span></a></td>';
+  }
+  function certGrid() {
+    var ships = DB.ships;
+    var head = '<tr><th>' + esc(L2(['Gruppo', 'Group'])) + '</th>' + ships.map(function (s) { var L = certsOf(s.code), m = (DB.certMeta || {})[s.code]; return '<th style="text-align:center"><a href="#/certificati' + qs({ nave: s.code }) + '">' + s.code + '</a><div class="mute" style="font-size:11px;font-weight:400">' + (L.length ? esc(L2(['agg. ', 'upd. ']) + fd(m && m.ref)) : esc(L2(['nessuna lista', 'no list']))) + '</div></th>'; }).join('') + '</tr>';
+    var rows = CG.filter(function (g) { return g[0] !== 'man'; }).map(function (g) {
+      return '<tr><th style="text-align:left;font-weight:600">' + esc(L2(g[1])) + '</th>' + ships.map(function (s) { return certCell(certsOf(s.code).filter(function (c) { return c.grp === g[0]; }), '#/certificati' + qs({ nave: s.code, gruppo: g[0] })); }).join('') + '</tr>';
+    }).join('');
+    var tot = '<tr class="cg-tot"><th style="text-align:left">' + esc(L2(['Totale nave', 'Vessel total'])) + '</th>' + ships.map(function (s) { return certCell(certsOf(s.code).filter(function (c) { return c.grp !== 'man'; }), '#/certificati' + qs({ nave: s.code })); }).join('') + '</tr>';
+    return '<div class="tablebox"><table class="grid cgrid"><thead>' + head + '</thead><tbody>' + rows + tot + '</tbody></table></div>';
+  }
+  function certReq(c) {
+    var d = c.req && byId(c.req); if (!d) return '';
+    var p = pratica(rootOf(d)), lab = p.state === 'cancel' ? L2(['Annullata', 'Cancelled']) : p.state === 'done' ? L2(['A bordo', 'On board']) : L2(PH[p.ph][1]);
+    return '<a class="chip ' + (p.state === 'cancel' ? 'c-neutral' : p.state === 'done' ? 'c-ok' : 'c-acc') + '" style="text-decoration:none;white-space:nowrap" href="#/doc/' + d.id + '" title="' + esc(d.num) + '">' + esc(d.num.slice(-4)) + ' · ' + esc(lab) + '</a>';
+  }
+  function certDueHtml(c, x) {
+    if (!x.n) return '<span class="mute">' + esc(L2(CST[x.st])) + '</span>' + (c.txt ? ' <span class="mute" style="font-size:11px">(' + esc(c.txt) + ')</span>' : '');
+    var what = x.n.what === 'exp' ? L2(['scadenza', 'expiry']) : x.n.what === 'calc' ? L2(['calcolata dalla validità', 'from validity']) : (x.n.s ? x.n.s.name : L2(['visita', 'survey'])) + (x.n.open ? ' · ' + L2(['finestra dal ', 'window from ']) + fd(x.n.open) : '');
+    return '<span class="j" style="font-weight:600">' + fd(x.n.due) + '</span><div class="mute" style="font-size:11px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(what) + '">' + esc(what) + '</div>';
+  }
+  function certDays(x) {
+    if (x.days == null) return '';
+    return '<span class="chip ' + CST[x.st][2] + '" style="white-space:nowrap">' + (x.days < 0 ? '−' + (-x.days) : x.days) + ' ' + esc(L2(['gg', 'd'])) + '</span>';
+  }
+  function whoSel(c) {
+    return '<select data-certf="' + esc(c.id) + '|who" data-stop="1" aria-label="' + esc(L2(['Chi', 'Who'])) + '" style="max-width:130px">' + ['<option value="">' + esc(L2(['— chi? —', '— who? —'])) + '</option>'].concat(CERT_WHO.map(function (w) { return '<option' + (c.who === w ? ' selected' : '') + '>' + esc(w) + '</option>'; })).join('') + '</select>';
+  }
+  function certDetail(c, x) {
+    var kv = function (l, v) { return v ? '<div><span class="mute" style="font-size:11px">' + esc(l) + '</span><div>' + v + '</div></div>' : ''; };
+    var sv = (c.surveys || []).map(function (s) { return '<div style="font-size:12px">' + esc(s.name) + ': ' + (s.date ? L2(['fatta il ', 'done on ']) + fd(s.date) : '<span class="t-warn">' + esc(L2(['data non indicata', 'date missing'])) + '</span>') + (s.due ? ' · ' + L2(['prossima entro ', 'next by ']) + fd(s.due) : '') + (s.place ? ' · ' + esc(s.place) : '') + '</div>'; }).join('');
+    var files = (c.files || []).map(function (f, i) { return '<button class="btn ghost sm" data-act="certopen" data-id="' + esc(c.id) + '" data-i="' + i + '">' + esc(f.name) + '</button>'; }).join('');
+    var hist = (c.hist || []).map(function (h) { return '<div style="font-size:12px"><span class="j">' + fd(h.at) + '</span> · ' + esc(L2(['prima: ', 'before: '])) + fd(h.issue) + ' → ' + fd(h.expiry) + (h.num ? ' · ' + esc(h.num) : '') + '</div>'; }).join('');
+    var sups = '<datalist id="certsup">' + (DB.suppliers || []).map(function (s) { return '<option value="' + esc(s.name) + '">'; }).join('') + '</datalist>';
+    return '<tr class="cdet"><td colspan="9"><div style="display:grid;gap:10px 18px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">' +
+      kv(L2(['Rilasciato', 'Issued']), c.issue ? '<span class="j">' + fd(c.issue) + '</span>' : esc(c.txt || '—')) + kv(L2(['Scadenza', 'Expiry']), c.expiry ? '<span class="j">' + fd(c.expiry) + '</span>' : (c.bad ? '<span class="t-warn">' + esc(c.bad) + ' (' + L2(['data non valida', 'invalid date']) + ')</span>' : '—')) +
+      kv(L2(['Luogo', 'Place']), esc(c.place)) + kv(L2(['Numero', 'Number']), '<span class="j">' + esc(c.num) + '</span>') + kv(L2(['Validità / note', 'Validity / notes']), esc(c.notes)) +
+      kv(L2(['Tipo di azione', 'Action type']), esc(L2(CK[c.kind] || CK.srv))) + '</div>' +
+      (sv ? '<div class="stack" style="gap:2px;margin-top:8px">' + sv + '</div>' : '') +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:10px">' +
+      '<label style="min-width:240px;display:flex;flex-direction:column;gap:4px;font-size:12px">' + esc(L2(['Fornitore / agenzia abituale', 'Usual supplier / agency'])) + '<input list="certsup" data-certf="' + esc(c.id) + '|sup" value="' + esc(c.sup || '') + '" placeholder="' + esc(L2(['es. ditta di servizio, agenzia', 'e.g. service company, agency'])) + '"></label>' + sups +
+      '<label style="display:flex;flex-direction:column;gap:4px;font-size:12px">' + esc(L2(['Tipo di azione', 'Action type'])) + '<select data-certf="' + esc(c.id) + '|kind">' + Object.keys(CK).map(function (k) { return '<option value="' + k + '"' + (c.kind === k ? ' selected' : '') + '>' + esc(L2(CK[k])) + '</option>'; }).join('') + '</select></label>' +
+      '<span style="flex:1"></span><button class="btn sm" data-act="certupd" data-id="' + esc(c.id) + '">' + esc(L2(['Aggiorna date e PDF', 'Update dates and PDF'])) + '</button></div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px"><span class="mute" style="font-size:12px">PDF:</span>' + (files || '<span class="mute" style="font-size:12px">' + esc(L2(['nessuno', 'none'])) + '</span>') + '</div>' +
+      (hist ? '<div class="stack" style="gap:2px;margin-top:8px"><span class="mute" style="font-size:12px">' + esc(L2(['Storico', 'History'])) + '</span>' + hist + '</div>' : '') +
+      '</td></tr>';
+  }
+  function pageCerts(q) {
+    var nave = q.nave || '', grp = q.gruppo || '', stf = q.stato || 'att', qq = (q.q || '').toUpperCase();
+    UI.certSel = UI.certSel || {};
+    var all = certsOf(nave).filter(function (c) { return grp ? c.grp === grp : c.grp !== 'man'; });
+    var list = all.map(function (c) { return { c: c, x: certNext(c) }; }).filter(function (o) {
+      var s = o.x.st;
+      if (qq && [o.c.no, o.c.name, o.c.place, o.c.num, o.c.who, o.c.sup, o.c.notes].join(' ').toUpperCase().indexOf(qq) < 0) return false;
+      if (stf === 'att') return s === 'bad' || s === 'w30' || s === 'w90';
+      if (stf === 'nd') return s === 'info' || s === 'empty' || o.x.nd;
+      if (stf === 'tutti') return true;
+      return s === stf;
+    }).sort(function (a, b) { var da = a.x.n ? a.x.n.due : '9', db = b.x.n ? b.x.n.due : '9'; return da < db ? -1 : da > db ? 1 : (a.c.ship < b.c.ship ? -1 : 1); });
+    var cnt = certCount(all);
+    var stTabs = [['att', L2(['Da gestire', 'To handle']), cnt.att], ['bad', L2(['Scaduti', 'Expired']), cnt.bad], ['w30', L2(['Entro 30 gg', 'Within 30 d']), cnt.w30], ['w90', L2(['Entro 90 gg', 'Within 90 d']), cnt.w90], ['ok', L2(['In regola', 'Valid']), cnt.ok], ['nd', L2(['Da completare', 'To complete']), cnt.info + cnt.empty + cnt.nd], ['tutti', L2(['Tutti', 'All']), cnt.tot]];
+    var shipPills = '<div style="display:flex;gap:6px;flex-wrap:wrap"><a class="chip ' + (!nave ? 'c-acc' : 'c-neutral') + '" style="text-decoration:none" href="#/certificati' + qs({ gruppo: grp, stato: q.stato }) + '">' + esc(L2(['Tutta la flotta', 'Whole fleet'])) + '</a>' +
+      DB.ships.map(function (s) { var n = certCount(certsOf(s.code).filter(function (c) { return c.grp !== 'man'; })).att; return '<a class="chip ' + (nave === s.code ? 'c-acc' : 'c-neutral') + '" style="text-decoration:none" href="#/certificati' + qs({ nave: s.code, gruppo: grp, stato: q.stato }) + '">' + s.code + (certsOf(s.code).length ? ' · ' + n : '') + '</a>'; }).join('') + '</div>';
+    var sel = Object.keys(UI.certSel).filter(function (k) { return UI.certSel[k] && certById(k); });
+    var bar = sel.length ? '<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-color:var(--accLine)"><b>' + sel.length + ' ' + esc(L2(['voci selezionate', 'items selected'])) + '</b><span class="mute" style="font-size:12px">' + esc(L2(['una sola richiesta per tutte (stessa nave)', 'one requisition for all (same vessel)'])) + '</span><span style="flex:1"></span><button class="btn ghost sm" data-act="certclr">' + esc(L2(['Deseleziona', 'Clear'])) + '</button><button class="btn pri sm" data-act="certrq">' + esc(L2(['Crea richiesta', 'Create requisition'])) + '</button></div>' : '';
+    var showShip = !nave;
+    var rows = list.slice(0, 400).map(function (o) {
+      var c = o.c, x = o.x, open = UI.certOpen === c.id;
+      return '<tr class="r crow' + (open ? ' on' : '') + '" data-act="certopenrow" data-id="' + esc(c.id) + '">' +
+        '<td><input type="checkbox" data-act="certsel" data-id="' + esc(c.id) + '"' + (UI.certSel[c.id] ? ' checked' : '') + ' aria-label="sel"></td>' +
+        (showShip ? '<td class="j">' + c.ship + '</td>' : '') + '<td class="j mute" style="white-space:nowrap">' + esc(c.no || '') + '</td>' +
+        '<td style="min-width:220px"><div style="font-weight:600;font-size:13px">' + esc(c.name) + '</div><div class="mute" style="font-size:11px">' + esc(cgName(c.grp)) + ' · ' + esc(L2(CK[c.kind] || CK.srv)) + (c.sup ? ' · ' + esc(c.sup) : '') + ((c.files || []).length ? ' · PDF ' + c.files.length : '') + (x.nd ? ' · <span class="t-warn">' + esc(L2(['dati da completare', 'data to complete'])) + '</span>' : '') + '</div></td>' +
+        '<td>' + certDueHtml(c, x) + '</td><td>' + certDays(x) + '</td>' +
+        '<td data-stop="1">' + whoSel(c) + '</td><td>' + certReq(c) + '</td>' +
+        '<td style="text-align:right;white-space:nowrap">' + (c.req && byId(c.req) ? '' : (x.st === 'bad' || x.st === 'w30' || x.st === 'w90' ? '<button class="btn pri sm" data-act="certorg" data-id="' + esc(c.id) + '">' + esc(L2(['Organizza', 'Arrange'])) + '</button>' : '<button class="btn ghost sm" data-act="certorg" data-id="' + esc(c.id) + '">' + esc(L2(['Organizza', 'Arrange'])) + '</button>')) + '</td></tr>' +
+        (open ? certDetail(c, x) : '');
+    }).join('');
+    var table = list.length ? '<div class="tablebox"><table class="grid ctable"><thead><tr><th></th>' + (showShip ? '<th>' + esc(t('c_ship')) + '</th>' : '') + '<th>N°</th><th>' + esc(L2(['Certificato / voce', 'Certificate / item'])) + '</th><th>' + esc(L2(['Prossima scadenza', 'Next due'])) + '</th><th>' + esc(L2(['Giorni', 'Days'])) + '</th><th>' + esc(L2(['Chi', 'Who'])) + '</th><th>' + esc(L2(['Pratica', 'Case'])) + '</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' + (list.length > 400 ? '<div class="mute" style="font-size:12px">' + esc(L2(['Mostrate le prime 400 voci: usa i filtri.', 'First 400 items shown: use the filters.'])) + '</div>' : '')
+      : '<div class="empty">' + esc(certsOf(nave).length ? L2(['Nessuna voce con questi filtri.', 'No items match these filters.']) : L2(['Nessuna lista certificati per questa nave. Caricala da Impostazioni › Dati (file DOC F01).', 'No certificate list for this vessel. Load it from Settings › Data (DOC F01 file).'])) + '</div>';
+    var body = '<div class="stack" style="gap:14px">' +
+      '<section class="card stack" style="gap:8px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><h2>' + esc(L2(['Situazione di flotta', 'Fleet overview'])) + '</h2><span class="mute" style="font-size:12px">' + esc(L2(['numero = voci scadute o in scadenza entro 90 giorni · clic per aprire', 'number = items expired or due within 90 days · click to open'])) + '</span></div>' + certGrid() + '</section>' +
+      '<div class="filters">' + shipPills + '<select data-filter="gruppo" aria-label="' + esc(L2(['Gruppo', 'Group'])) + '"><option value="">' + esc(L2(['Tutti i gruppi', 'All groups'])) + '</option>' + CG.map(function (g) { return '<option value="' + g[0] + '"' + (grp === g[0] ? ' selected' : '') + '>' + esc(L2(g[1])) + '</option>'; }).join('') + '</select>' +
+      '<input type="search" data-filter="q" value="' + esc(q.q || '') + '" placeholder="' + esc(L2(['Cerca certificato, numero, ditta', 'Search certificate, number, company'])) + '" style="flex:1;min-width:160px"></div>' +
+      '<nav class="tabs" style="flex-wrap:wrap">' + stTabs.map(function (s) { return '<a class="' + (stf === s[0] ? 'on' : '') + '" href="#/certificati' + qs({ nave: nave, gruppo: grp, stato: s[0] === 'att' ? '' : s[0], q: q.q }) + '">' + esc(s[1]) + '<span class="j">' + s[2] + '</span></a>'; }).join('') + '</nav>' +
+      bar + table + '</div>';
+    return shell('certificati', crumb([[t('fleet'), '#/']]), L2(['Certificati', 'Certificates']) + (nave ? ' · ' + shipBy(nave).name : ''), body);
+  }
+  function certLineDesc(c) {
+    var x = certNext(c), due = x.n ? ' · ' + L2(['scad. ', 'due ']) + fd(x.n.due) : '';
+    var pre = c.kind === 'svy' ? L2(['Visita ', 'Survey ']) + (x.n && x.n.what === 'svy' && x.n.s ? '(' + x.n.s.name + ') ' : L2(['rinnovo ', 'renewal '])) : c.kind === 'srv' ? L2(['Servizio: ', 'Service: ']) : c.kind === 'adm' ? L2(['Rinnovo: ', 'Renewal: ']) : '';
+    return (pre + c.name + due).slice(0, 200);
+  }
+  function certMakeRq(ids) {
+    var L = ids.map(certById).filter(Boolean); if (!L.length) return;
+    var ship = L[0].ship;
+    if (L.some(function (c) { return c.ship !== ship; })) { toast(L2(['Seleziona voci della stessa nave', 'Select items of the same vessel'])); return; }
+    var dues = L.map(function (c) { var x = certNext(c); return x.n ? x.n.due : null; }).filter(Boolean).sort();
+    var lines = L.map(function (c, i) { return { row: (i + 1) * 10, item: null, code: '', impa: '', desc: certLineDesc(c), note: [c.who, c.sup].filter(Boolean).join(' · '), uom: 'PCE', qty: 1 }; });
+    var desc = L.length === 1 ? L2(['Certificati · ', 'Certificates · ']) + L[0].name : L2(['Certificati · ', 'Certificates · ']) + L.length + ' ' + L2(['voci', 'items']) + ' (' + L.map(function (c) { return cgName(c.grp); }).filter(function (v, i, a) { return a.indexOf(v) === i; }).join(', ') + ')';
+    var due = dues[0] ? (dues[0] < TODAY ? addDays(TODAY, 7) : addDays(dues[0], -7) < TODAY ? TODAY : addDays(dues[0], -7)) : null;
+    var d = newDoc('RQ', ship, { desc: desc.slice(0, 120), status: P.seat === 'ship' ? 'bozza' : 'endorsed', side: P.seat === 'ship' ? 'ship' : 'office', dept: 'DECK', due: due, lines: lines, certs: L.map(function (c) { return c.id; }) }, L2(['Creata dai certificati', 'Created from certificates']));
+    L.forEach(function (c) { c.req = d.id; delete UI.certSel[c.id]; });
+    save(); location.hash = '#/doc/' + d.id; toast(L2(['Richiesta creata: ', 'Requisition created: ']) + d.num);
+  }
+  CLICK.certorg = function (a) { certMakeRq([a.getAttribute('data-id')]); };
+  CLICK.certrq = function () { certMakeRq(Object.keys(UI.certSel || {}).filter(function (k) { return UI.certSel[k]; })); };
+  CLICK.certclr = function () { UI.certSel = {}; render(); };
+  CLICK.certsel = function (a) { UI.certSel = UI.certSel || {}; UI.certSel[a.getAttribute('data-id')] = a.checked; render(); };
+  CLICK.certopenrow = function (a) { var id = a.getAttribute('data-id'); UI.certOpen = UI.certOpen === id ? null : id; render(); };
+  CLICK.certopen = function (a) { var c = certById(a.getAttribute('data-id')), f = c && (c.files || [])[+a.getAttribute('data-i')]; if (f) openFile(f.file, f.name); };
+  CLICK.certupd = function (a) {
+    var c = certById(a.getAttribute('data-id')); if (!c) return;
+    var s0 = (c.surveys || [])[0];
+    var inner = '<div class="mute" style="font-size:13px">' + esc(c.ship + ' · ' + (c.no ? c.no + ' · ' : '') + c.name) + '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+      '<label>' + esc(L2(['Data rilascio', 'Issue date'])) + '<input type="date" name="issue" value="' + esc(c.issue || '') + '"></label>' +
+      '<label>' + esc(L2(['Scadenza', 'Expiry'])) + (c.period ? ' <span class="mute" style="font-size:11px">(' + L2(['validità ', 'validity ']) + c.period + ' ' + L2(['mesi', 'months']) + ')</span>' : '') + '<input type="date" name="expiry" value="' + esc(c.expiry || '') + '"></label>' +
+      (s0 ? '<label style="grid-column:1/-1">' + esc(s0.name + ' · ' + L2(['data visita', 'survey date'])) + '<input type="date" name="svy" value="' + esc(s0.date || '') + '"></label>' : '') +
+      '<label>' + esc(L2(['Luogo', 'Place'])) + '<input name="place" value="' + esc(c.place || '') + '"></label>' +
+      '<label>' + esc(L2(['Numero certificato', 'Certificate number'])) + '<input name="num" value="' + esc(c.num || '') + '"></label>' +
+      '<label style="grid-column:1/-1">' + esc(L2(['PDF del certificato', 'Certificate PDF'])) + '<input type="file" name="file" accept=".pdf,image/*" multiple></label></div>' +
+      '<div class="mute" style="font-size:12px">' + esc(L2(['Le date precedenti restano nello storico. Si aggiorna da Ufficio o da Bordo.', 'Previous dates stay in the history. Update from Office or Vessel.'])) + '</div>';
+    formModal(L2(['Aggiorna certificato', 'Update certificate']), inner, function (f) {
+      var v = function (n) { var el = f.elements[n]; return el ? el.value.trim() : ''; };
+      var ni = v('issue') || null, ne = v('expiry') || null;
+      if (ni !== c.issue || ne !== c.expiry || v('num') !== (c.num || '')) { c.hist = c.hist || []; c.hist.unshift({ at: TODAY, issue: c.issue, expiry: c.expiry, num: c.num, place: c.place }); }
+      c.issue = ni; c.expiry = ne; c.place = v('place'); c.num = v('num'); c.bad = null; if (ni) c.txt = null;
+      if (s0 && v('svy') && v('svy') !== s0.date) { s0.date = v('svy'); if (s0.due) s0.due = addMonths(s0.date, 12); }
+      c.upd = TODAY; c.updBy = P.seat;
+      var fl = f.elements.file && f.elements.file.files;
+      if (fl && fl.length) uploadFiles(fl, function (out) { c.files = c.files || []; out.forEach(function (o) { c.files.push({ name: o.name, file: o, at: TODAY }); }); save(); render(); });
+      save(); render(); toast(L2(['Certificato aggiornato', 'Certificate updated']));
+    }, {
+      ok: L2(['Salva', 'Save']), onInput: function (e, f) {
+        if (e.target.name === 'issue' && c.period > 0 && e.target.value) f.elements.expiry.value = addMonths(e.target.value, c.period);
+      }
+    });
+  };
+  function certSetField(spec, val) {
+    var p = spec.split('|'), c = certById(p[0]); if (!c) return;
+    c[p[1]] = val; c.upd = c.upd || null; save();
+    if (p[1] === 'kind') render();
+    toast(L2(['Salvato', 'Saved']));
+  }
+  /* ---- importazione DOC F01 ---- */
+  function shipByName(n) { n = String(n || '').toUpperCase().replace(/\s+/g, ' ').trim(); for (var i = 0; i < DB.ships.length; i++) if (DB.ships[i].name.toUpperCase() === n || DB.ships[i].code === n) return DB.ships[i]; return null; }
+  function planCerts(rows, raw, fname) {
+    var R = parseF01(rows, raw); if (!R) return null;
+    var guess = shipByName(R.shipName) || (function () { for (var i = 0; i < DB.ships.length; i++) if (fname.toUpperCase().indexOf(DB.ships[i].name.toUpperCase()) >= 0) return DB.ships[i]; return null; })();
+    return { kind: 'certs', file: fname, ref: R.ref, shipName: R.shipName, ship: guess ? guess.code : '', list: R.list };
+  }
+  function certDiff(P, ship) {
+    var ex = {}, o = { add: 0, upd: 0, keep: 0, same: 0 };
+    certsOf(ship).forEach(function (c) { ex[c.key] = c; });
+    P.list.forEach(function (n) {
+      var c = ex[n.key]; if (!c) { o.add++; return; }
+      if (c.upd && P.ref && c.upd > P.ref) { o.keep++; return; }
+      var ch = ['issue', 'expiry', 'place', 'num', 'notes', 'txt'].some(function (k) { return (c[k] || '') !== (n[k] || ''); }) || JSON.stringify((c.surveys || []).map(function (s) { return [s.date, s.due]; })) !== JSON.stringify(n.surveys.map(function (s) { return [s.date, s.due]; }));
+      if (ch) o.upd++; else o.same++;
+    });
+    return o;
+  }
+  function applyCerts(P, ship) {
+    if (!ship) return null;
+    DB.certs = DB.certs || [];
+    var ex = {}; certsOf(ship).forEach(function (c) { ex[c.key] = c; });
+    var o = certDiff(P, ship);
+    P.list.forEach(function (n) {
+      var c = ex[n.key];
+      if (!c) { var nc = JSON.parse(JSON.stringify(n)); nc.id = ship + '-C-' + n.key.replace(/[^A-Z0-9#]/g, '').slice(0, 30) + '-' + Math.floor(Math.random() * 1e5); nc.ship = ship; nc.files = []; nc.hist = []; DB.certs.push(nc); return; }
+      if (c.upd && P.ref && c.upd > P.ref) return;
+      if ((c.issue !== n.issue || c.expiry !== n.expiry) && (c.issue || c.expiry)) { c.hist = c.hist || []; c.hist.unshift({ at: P.ref || TODAY, issue: c.issue, expiry: c.expiry, num: c.num, place: c.place }); }
+      ['no', 'name', 'sec', 'issue', 'expiry', 'txt', 'bad', 'place', 'num', 'notes', 'period'].forEach(function (k) { c[k] = n[k]; });
+      c.surveys = n.surveys;
+    });
+    DB.certMeta = DB.certMeta || {}; DB.certMeta[ship] = { ref: P.ref, file: P.file, at: TODAY };
+    return o;
+  }
+  function planCertsHtml(P, i) {
+    var opts = '<option value="">' + esc(L2(['— scegli la nave —', '— choose the vessel —'])) + '</option>' + DB.ships.map(function (s) { return '<option value="' + s.code + '"' + (s.code === P.ship ? ' selected' : '') + '>' + s.code + ' · ' + esc(s.name) + '</option>'; }).join('');
+    var o = P.ship ? certDiff(P, P.ship) : null;
+    return '<div class="stack" style="gap:4px"><b>' + esc(P.file) + '</b><span class="mute" style="font-size:12px">' + esc(L2(['Lista certificati DOC F01 · aggiornata al ', 'Certificate list DOC F01 · updated on ']) + fd(P.ref)) + ' · ' + P.list.length + ' ' + esc(L2(['voci', 'items'])) + '</span>' +
+      '<label style="flex-direction:row;align-items:center;gap:8px">' + esc(L2(['Nave', 'Vessel'])) + (P.shipName ? ' <span class="mute" style="font-size:12px">(' + esc(L2(['dal file: ', 'from file: ']) + P.shipName) + ')</span>' : ' <span class="t-warn" style="font-size:12px">' + esc(L2(['nome nave non trovato nel file', 'vessel name not found in the file'])) + '</span>') + '<select name="cship-' + i + '">' + opts + '</select></label>' +
+      (o ? '<span>' + esc(L2(['Nuove: ', 'New: '])) + '<b class="j">' + o.add + '</b> · ' + esc(L2(['aggiornate: ', 'updated: '])) + '<b class="j">' + o.upd + '</b> · ' + esc(L2(['invariate ', 'unchanged '])) + o.same + (o.keep ? ' · <span class="t-warn">' + esc(L2(['tenute dal prototipo (aggiornate dopo il file): ', 'kept from the prototype (updated after the file): '])) + o.keep + '</span>' : '') + '</span>' : '') +
+      (P.ref && P.ref < addMonths(TODAY, -6) ? '<span class="t-warn" style="font-size:12px">' + esc(L2(['File vecchio di oltre 6 mesi: controlla che sia l\'ultima versione.', 'File older than 6 months: check it is the latest version.'])) + '</span>' : '') + '</div>';
+  }
+
   /* ---------- render & events ---------- */
   function render() {
     UI.kids = null;
@@ -3086,6 +3401,7 @@
     else if (s[0] === 'fornitori') html = pageSuppliers(r.q);
     else if (s[0] === 'fornitore') html = pageSupplier(decodeURIComponent(s[1]));
     else if (s[0] === 'scadenze') html = pageDue(r.q);
+    else if (s[0] === 'certificati' || (s[0] === 'modulo' && s[1] === 'certificati')) html = pageCerts(r.q);
     else if (s[0] === 'modulo') html = pageSoon(s[1]);
     else if (s[0] === 'magazzino') html = pageStores(r.q);
     else if (s[0] === 'articolo') html = pageItem(s[1], r.q);
@@ -3171,6 +3487,7 @@
     if (el.getAttribute('data-pldef')) { var pd = el.getAttribute('data-pldef').split('|'), dw = whOf(pd[0]); dw.placements.forEach(function (x, k) { x.default = k === +pd[1]; }); save(); render(); return; }
     if (el.getAttribute('data-plcan')) { var pc2 = el.getAttribute('data-plcan').split('|'), cw = whOf(pc2[0]); cw.placements[+pc2[1]].cancelled = el.checked; save(); render(); return; }
     if (el.getAttribute('data-nextport') || el.getAttribute('data-nexteta')) { var nsh = shipBy(el.getAttribute('data-nextport') || el.getAttribute('data-nexteta')); nsh.nextPort = nsh.nextPort || {}; if (el.getAttribute('data-nextport')) nsh.nextPort.name = el.value.trim(); else nsh.nextPort.eta = el.value; save(); render(); toast(L2(['Prossimo porto aggiornato', 'Next port updated'])); return; }
+    if (el.getAttribute('data-certf')) { certSetField(el.getAttribute('data-certf'), el.value.trim()); return; }
     if (el.getAttribute('data-act') === 'impfiles') { importFiles(el.files); el.value = ''; return; }
     if (el.getAttribute('data-aset')) { aset(el.getAttribute('data-aset'), parseNum(el.value)); toast(L2(['Parametro salvato', 'Parameter saved'])); return; }
     if (el.getAttribute('data-asett')) { aset(el.getAttribute('data-asett'), el.value.trim()); toast(L2(['Parametro salvato', 'Parameter saved'])); return; }
@@ -3240,6 +3557,7 @@
     DB.settings.invMig = 3; save();
   }
   if (!DB.warehouses && window.SEED.warehouses) { DB.warehouses = clone(window.SEED.warehouses); save(); }
+  if (!DB.certs && window.SEED.certs) { DB.certs = clone(window.SEED.certs); DB.certMeta = clone(window.SEED.certMeta || {}); save(); }
   DB.settings = DB.settings || {};
   if (!DB.settings.approval) DB.settings.approval = { auto: 2500, mgr: 'Direttore tecnico', mgrMax: 25000, top: 'Armatore' };
   if (!DB.settings.landed) DB.settings.landed = { EU: { pct: 4, min: 60 }, EXTRA: { pct: 8, min: 150 }, ASIA: { pct: 11, min: 250 }, hub: 90, customs: 3 };
