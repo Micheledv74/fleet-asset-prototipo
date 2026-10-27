@@ -46,7 +46,7 @@
     c_eur: ['Controvalore €', 'EUR value'], c_usd: ['Controvalore $', 'USD value'], c_limit: ['Limite offerta', 'Quotation limit'], c_deliverTo: ['Consegna a', 'Deliver to'],
     c_from: ['Nasce da', 'Created from'],
     office: ['Ufficio', 'Office'], ship: ['Bordo', 'Vessel'], toship: ['In invio a bordo', 'Sending to vessel'],
-    ENG: ['Macchina', 'Engine'], DECK: ['Coperta', 'Deck'], SAFETY: ['Sicurezza', 'Safety'], CARGO: ['Carico', 'Cargo'], VESSEL: ['Nave', 'Vessel'],
+    ENG: ['Macchina', 'Engine'], DECK: ['Coperta', 'Deck'], SAFETY: ['Sicurezza', 'Safety'], CARGO: ['Carico', 'Cargo'], VESSEL: ['Nave', 'Vessel'], TECH: ['Ufficio tecnico', 'Technical'], CMD: ['Comando', 'Ship command'], OFFICE: ['Ufficio', 'Office'],
     path: ['Percorso', 'Workflow'], next: ['Prossimo passo', 'Next step'], cancel: ['Annulla', 'Cancel'], chain: ['Documenti collegati', 'Linked documents'],
     history: ['Cronologia', 'History'], lines: ['Righe', 'Lines'], noLines: ['Le righe non sono negli export lista di InfoSHIP: per questo documento il prototipo mostra solo la testata. La pratica demo (blocco 2) avrà le righe complete.', 'Lines are not included in InfoSHIP list exports: the prototype shows only the header for this document. The demo case (block 2) will have full lines.'],
     noChain: ['Nessun documento collegato trovato.', 'No linked documents found.'], details: ['Dati del documento', 'Document data'],
@@ -97,7 +97,7 @@
     RQ: { bozza: ['Bozza', 'Draft'], endorsed: ['Endorsed', 'Endorsed'], verifica: ['Verifica ufficio', 'Office review'], quotazione: ['In quotazione', 'Price sourcing'], quotata: ['Quotata', 'Priced'], ordinata: ['Ordinata', 'Ordered'], chiusa: ['Chiusa', 'Closed'], annullata: ['Annullata', 'Cancelled'] },
     RFQ: { creata: ['Creata', 'Created'], inviata: ['Inviata', 'Sent to vendor'], quotata: ['Offerta ricevuta', 'Offer received'], rifiutata: ['Rifiutata', 'Refused'], annullata: ['Annullata', 'Cancelled'] },
     PO: { bozza: ['Bozza', 'Draft'], approvato: ['Approvato', 'Approved'], inviato: ['Inviato', 'Published'], confermato: ['Confermato', 'Confirmed'], finalizzato: ['Finalizzato', 'Finalized'], annullato: ['Annullato', 'Cancelled'] },
-    DN: { pronta: ['Pronta per spedizione', 'Ready for shipment'], hub: ['In hub spedizioniere', 'At forwarder hub'], spedita: ['Spedita alla nave', 'Shipped to vessel'], ricevuta: ['Ricevuta a bordo', 'Received on board'] },
+    DN: { pronta: ['Pronta per spedizione', 'Ready for shipment'], hub: ['In hub spedizioniere', 'At forwarder hub'], spedita: ['Spedita alla nave', 'Shipped to vessel'], ricevuta: ['Ricevuta a bordo', 'Received on board'], annullata: ['Annullata', 'Cancelled'] },
     CS: { registrato: ['Registrato', 'Recorded'] }, INV: { registrato: ['Registrato', 'Recorded'] },
     FT: { registrata: ['Registrata', 'Booked'], pagata: ['Pagata', 'Paid'] }
   };
@@ -490,7 +490,7 @@
       (UI.edit && UI.edit.id === d.id ? editHeader(d) : '<h1 class="h1">' + esc(d.desc || '—') + '</h1>' + (d.note ? '<div class="note">' + esc(d.note) + '</div>' : '')) + '</div>';
     var body = '<div class="row">' + pathHtml + '<div class="grow stack" style="gap:14px">' + head + info +
       docTabs(d, { righe: lines, all: { RQ: 1, RFQ: 1, PO: 1, DN: 1, FT: 1 }[d.type] ? attSection(d) : null, sped: d.type === 'DN' ? (feat('qr') ? qrCard(d) : '') + logisticsCard(d) : null,
-        cron: '<section class="card stack"><h2>' + esc(t('chain')) + '</h2><div class="chain">' + chainHtml + '</div></section><section class="card stack"><h2>' + esc(t('history')) + '</h2><div class="log">' + log + '</div></section>' }) +
+        cron: docTasks(d) + '<section class="card stack"><h2>' + esc(t('chain')) + '</h2><div class="chain">' + chainHtml + '</div></section><section class="card stack"><h2>' + esc(t('history')) + '</h2><div class="log">' + log + '</div></section>' }) +
       '</div><aside class="side">' + nextHtml + '</aside></div>';
     return shell('doc', crumb([[t('fleet'), '#/'], [shipBy(d.ship).name, '#/nave/' + d.ship], [t(d.type), '#/docs' + qs({ tipo: d.type, nave: d.ship })]]), t(d.type + '1') + ' ' + d.num, body);
   }
@@ -627,7 +627,7 @@
   }
   function pageData() {
     var n = DB.docs.length;
-    var body = '<section class="card stack"><h2>' + esc(t('d_src')) + '</h2><p style="margin:0">' + esc(DB.meta.source) + ' · <span class="j">' + n + '</span> ' + esc(P.lang === 'en' ? 'documents' : 'documenti') + ', <span class="j">' + DB.suppliers.length + '</span> ' + esc(t('suppliers').toLowerCase()) + ', budget PEP · MDT · MLG 2026.</p><p class="mute" style="margin:0">' + esc(t('d_txt')) + '</p>' +
+    var body = importCard() + '<section class="card stack"><h2>' + esc(t('d_src')) + '</h2><p style="margin:0">' + esc(DB.meta.source) + ' · <span class="j">' + n + '</span> ' + esc(P.lang === 'en' ? 'documents' : 'documenti') + ', <span class="j">' + DB.suppliers.length + '</span> ' + esc(t('suppliers').toLowerCase()) + ', budget PEP · MDT · MLG 2026.</p><p class="mute" style="margin:0">' + esc(t('d_txt')) + '</p>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="export">' + esc(t('d_export')) + '</button><label class="btn">' + esc(t('d_import')) + '<input type="file" accept="application/json" data-act="import" hidden></label><button class="btn link" data-act="reset">' + esc(t('d_reset')) + '</button></div></section>';
     return shell('dati', crumb([[t('fleet'), '#/']]), t('d_title'), body);
   }
@@ -1393,7 +1393,7 @@
       body = todo.length ? '<div class="tablebox"><table class="grid"><thead><tr><th>' + esc(t('c_num')) + '</th><th>' + esc(t('c_ship')) + '</th><th>' + esc(t('c_sup')) + '</th><th>' + esc(t('c_desc')) + '</th><th>' + esc(L2(['Ordine', 'Order'])) + '</th><th class="num">' + esc(L2(['Valore ricevuto', 'Received value'])) + '</th><th></th></tr></thead><tbody>' +
         todo.map(function (d) {
           var po = byId(d.from[0]), v = 0;
-          d.lines.forEach(function (l) { var pl = po.lines.filter(function (x) { return x.row === l.src; })[0]; if (pl && l.recv) v += l.recv * pl.price * disc(pl); });
+          if (d.lines && d.lines.length) d.lines.forEach(function (l) { var pl = po.lines.filter(function (x) { return x.row === l.src; })[0]; if (pl && l.recv) v += l.recv * pl.price * disc(pl); }); else v = po.total || 0;
           return '<tr><td>' + COLS.num.v(d) + '</td><td>' + COLS.ship.v(d) + '</td><td>' + esc(supName(d.sup)) + '</td><td><a href="#/doc/' + d.id + '">' + esc(d.desc) + '</a></td><td class="j">' + esc(po.num) + '</td><td class="num j">' + money(v, po.cur) + '</td><td>' +
             (P.seat === 'acc' ? '<button class="btn pri sm" data-act="ftfor" data-id="' + d.id + '">' + esc(L2(['Registra fattura', 'Book invoice'])) + '</button>' : '<span class="mute" style="font-size:12px">' + esc(L2(['postazione Contabilità', 'Accounting station'])) + '</span>') + '</td></tr>';
         }).join('') + '</tbody></table></div>' : '<div class="empty">' + esc(L2(['Nessuna consegna ricevuta in attesa di fattura.', 'No received delivery awaiting invoice.'])) + '</div>';
@@ -1926,7 +1926,7 @@
     var ev = (tr.events || []).slice().reverse().slice(0, 6).map(function (e) { return '<div><span class="j">' + fd(e.at) + '</span><span>' + esc(e.txt) + (e.loc ? ' · ' + esc(e.loc) : '') + (e.note ? ' · ' + esc(e.note) : '') + '</span></div>'; }).join('');
     return '<section class="card stack"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2>' + esc(L2(['Dov\'è la merce', 'Where are the goods'])) + '</h2><button class="btn sm" data-act="legadd">' + esc(L2(['Aggiungi tratta e tracking', 'Add leg and tracking'])) + '</button></div>' +
       (feat('sped') && d.type === 'DN' && shpOf(d.id) ? '<div class="note" style="color:var(--ink)">' + esc(L2(['Viaggia nella spedizione consolidata ', 'Travels in consolidated shipment '])) + '<a href="#/spedizione/' + shpOf(d.id).id + '">' + esc(shpOf(d.id).num) + '</a>' + esc(L2([': tappe e tracking si aggiornano lì.', ': stages and tracking are updated there.'])) + '</div>' : '') +
-      '<div style="display:flex;gap:6px;flex-wrap:wrap">' + steps + '</div>' + (ev ? '<div class="log">' + ev + '</div>' : '') + legs + '</section>';
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">' + steps + '</div>' + (tr.dashNote ? '<div class="note" style="color:var(--ink);white-space:pre-line"><b>' + esc(L2(['Dalla dashboard', 'From the dashboard'])) + ':</b> ' + esc(tr.dashNote) + '</div>' : '') + (ev ? '<div class="log">' + ev + '</div>' : '') + legs + '</section>';
   }
   CLICK.stage = function (a) {
     var d = curT(); if (!d) return; var k = a.getAttribute('data-k');
@@ -2105,7 +2105,7 @@
       out.push({ g: 'appr', d: d, why: money(d.total, d.cur) + (r ? ' · ' + L2(['approva: ', 'approver: ']) + r.who : ''), age: daysBetween(d.date, TODAY), act: { l: L2(['Apri e approva', 'Open and approve']), href: '#/doc/' + d.id } });
     });
     docs(function (d) { return d.type === 'PO' && ok(d) && (d.status === 'approvato' || d.needResend); }).forEach(function (d) { out.push({ g: 'send', d: d, why: d.needResend ? 'Rev. ' + d.rev + ' ' + L2(['da rimandare', 'to resend']) : money(d.total, d.cur), age: daysBetween(d.date, TODAY), act: { l: L2(['Apri e invia', 'Open and send']), href: '#/doc/' + d.id } }); });
-    docs(function (d) { return d.type === 'RFQ' && ok(d) && d.status === 'inviata' && d.limit && d.limit < TODAY; }).forEach(function (d) { out.push({ g: 'rfq', d: d, why: L2(['limite ', 'limit ']) + fd(d.limit) + (d.chased ? ' · ' + L2(['sollecitata il ', 'chased on ']) + fd(d.chased) : ''), age: daysBetween(d.limit, TODAY), act: { l: L2(['Sollecita', 'Chase']), chase: 1 } }); });
+    docs(function (d) { return d.type === 'RFQ' && ok(d) && d.status === 'inviata' && d.limit && d.limit < TODAY && d.limit >= addDays(TODAY, -60); }).forEach(function (d) { out.push({ g: 'rfq', d: d, why: L2(['limite ', 'limit ']) + fd(d.limit) + (d.chased ? ' · ' + L2(['sollecitata il ', 'chased on ']) + fd(d.chased) : ''), age: daysBetween(d.limit, TODAY), act: { l: L2(['Sollecita', 'Chase']), chase: 1 } }); });
     docs(function (d) { return d.type === 'PO' && ok(d) && isOpen(d) && isLate(d); }).forEach(function (d) { out.push({ g: 'po', d: d, why: L2(['consegna prevista ', 'due ']) + fd(d.due) + (d.chased ? ' · ' + L2(['sollecitato il ', 'chased on ']) + fd(d.chased) : ''), age: daysBetween(d.due, TODAY), act: { l: L2(['Sollecita', 'Chase']), chase: 1 } }); });
     docs(function (d) { return d.type === 'DN' && ok(d) && d.status === 'spedita' && d.due && d.due <= addDays(TODAY, -3) && !staleDn(d); }).forEach(function (d) { out.push({ g: 'dn', d: d, why: L2(['a bordo previsto ', 'due on board ']) + fd(d.due) + (d.chased ? ' · ' + L2(['sollecitata il ', 'chased on ']) + fd(d.chased) : ''), age: daysBetween(d.due, TODAY), act: { l: L2(['Sollecita la nave', 'Chase the vessel']), chase: 1 } }); });
     var toInv = docs(function (d) { return d.type === 'DN' && d.status === 'ricevuta' && (!nave || d.ship === nave) && !docs(function (x) { return x.type === 'FT' && x.from && x.from.indexOf(d.id) >= 0; }).length; });
@@ -2522,7 +2522,7 @@
     ['sol', ['Da sollecitare', 'To chase'], ['rfq', 'po', 'dn']],
     ['new', ['Richieste nuove da bordo', 'New requisitions from vessels'], ['new', 'inv']]
   ];
-  function todoCount(nave) { return todayItems(nave).length; }
+  function todoCount(nave) { return todayItems(nave).length + taskRows(nave).length; }
   function todoBody(q) {
     var nave = q.nave || '', items = todayItems(nave);
     var html = TODO.map(function (g) {
@@ -2533,7 +2533,7 @@
         (it.length > 6 && !all ? '<button class="btn ghost sm" data-act="qmore" data-k="' + g[0] + '" style="align-self:flex-start;margin-top:8px;color:var(--teal)">' + esc(L2(['Mostra tutte', 'Show all'])) + ' (' + it.length + ')</button>' : '') + '</section>';
     }).join('');
     var shipOpts = DB.ships.filter(function (s) { return s.infoship; }).map(function (s) { return '<option value="' + s.code + '"' + (nave === s.code ? ' selected' : '') + '>' + s.code + ' · ' + esc(s.name) + '</option>'; }).join('');
-    return '<div class="filters"><select data-filter="nave" aria-label="' + esc(t('c_ship')) + '"><option value="">' + esc(t('allShips')) + '</option>' + shipOpts + '</select><span style="flex:1"></span><button class="btn pri sm" data-act="newrq" data-ship="' + nave + '">' + esc(L2(['Nuova richiesta', 'New requisition'])) + '</button></div><div class="stack" style="gap:14px">' + html + '</div>';
+    return '<div class="filters"><select data-filter="nave" aria-label="' + esc(t('c_ship')) + '"><option value="">' + esc(t('allShips')) + '</option>' + shipOpts + '</select><span style="flex:1"></span><button class="btn pri sm" data-act="newrq" data-ship="' + nave + '">' + esc(L2(['Nuova richiesta', 'New requisition'])) + '</button></div><div class="stack" style="gap:14px">' + html + tasksSection(nave) + '</div>';
   }
 
   /* ---------- Impostazioni · Generale ---------- */
@@ -2699,6 +2699,237 @@
       (np.name && !p ? '<span class="t-warn" style="font-size:11px">' + esc(L2(['porto non riconosciuto', 'port not recognised'])) + '</span>' : '') + '</label><datalist id="portlist">' + PORTS.map(function (x) { return '<option value="' + x[0] + '">'; }).join('') + '</datalist>';
   }
 
+
+  /* =====================================================================
+     AGGIORNAMENTO DA FILE (InfoSHIP Excel, budget, backup dashboard)
+     InfoSHIP resta il riferimento per testata e stato dei documenti importati.
+     Righe, allegati, tracking, scelte e note fatte nel prototipo non si toccano.
+     ===================================================================== */
+  var IMP_ST = {
+    'REQ Created': 'bozza', 'REQ Endorsed': 'endorsed', 'REQ Price Sourcing': 'quotazione', 'REQ Approved': 'quotata', 'REQ Ordered': 'ordinata', 'REQ Cancelled': 'annullata', 'REQ Refused': 'annullata', 'REQ Closed': 'chiusa',
+    'RFQ Created': 'creata', 'RFQ Sent to Vendor': 'inviata', 'RFQ Offer Acknowledged': 'quotata', 'RFQ Refused': 'rifiutata', 'RFQ Cancelled': 'annullata',
+    'PO Created': 'bozza', 'PO Approved': 'approvato', 'PO Published': 'inviato', 'PO Confirmed': 'confermato', 'PO Finalized': 'finalizzato', 'PO Cancelled': 'annullato', 'PO Rejected': 'annullato',
+    'DN Ready for Shipment': 'pronta', 'DN Delivery Tracking Open': 'pronta', 'DN Shipped to Vessel': 'spedita', 'DN Received on Board': 'ricevuta', 'DN Cancelled': 'annullata'
+  };
+  var IMP_DEPT = { 'ENGINE Department': 'ENG', 'DECK Department': 'DECK', 'SAFETY': 'SAFETY', 'CARGO': 'CARGO', 'VESSEL': 'VESSEL', 'TECHNICAL DEPARTMENT': 'TECH', 'SHIP COMMAND': 'CMD', 'OFFICE': 'OFFICE' };
+  var IMP_SIDE = { 'Office': 'office', 'Remote': 'ship', 'Send to Remote': 'toship' };
+  var IMP_FAM = { SHPR: ['RQ', 'RQ', 'ship'], HQPR: ['RQ', 'RQO', 'office'], HQSR: ['RQ', 'RQS', 'service'], HQRQ: ['RFQ', 'RFQ'], HQPO: ['PO', 'PO'], HQDN: ['DN', 'DN'] };
+  var IMP_VES = { peppino: 'PEP', medtoscana: 'MDT', 'med toscana': 'MDT', medliguria: 'MLG', 'med liguria': 'MLG', norrbotten: 'ATL', atlas: 'ATL', vegauno: 'VGU', 'vega uno': 'VGU' };
+  var xlsxP = null;
+  function loadXlsx() { if (window.XLSX) return Promise.resolve(); if (xlsxP) return xlsxP; xlsxP = new Promise(function (ok, ko) { var s = document.createElement('script'); s.src = 'lib/xlsx.full.min.js'; s.onload = ok; s.onerror = ko; document.head.appendChild(s); }); return xlsxP; }
+  function xDate(v) {
+    if (v == null || v === '') return null;
+    if (typeof v === 'number') { var d = new Date(Math.round((v - 25569) * 864e5)); return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()); }
+    var m = String(v).match(/(\d{4})-(\d{2})-(\d{2})/); if (m) return m[0];
+    m = String(v).match(/(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})/); return m ? m[3] + '-' + pad(+m[2]) + '-' + pad(+m[1]) : null;
+  }
+  function xStr(v) { return v == null ? null : String(v).trim() || null; }
+  function normDesc(s) { return String(s || '').toUpperCase().replace(/\s+/g, ' ').trim(); }
+  function numFromOrig(orig) {
+    var m = String(orig).match(/^(\d{4})-(?:([A-Z]{3})-)?([A-Z]{4})-(\d+)$/); if (!m || !IMP_FAM[m[3]]) return null;
+    var f = IMP_FAM[m[3]]; return { ship: m[2] || null, type: f[0], kind: f[2] || null, num: (m[2] || 'HQS') + '-' + m[1] + '-' + f[1] + '-' + pad4(+m[4]) };
+  }
+  function pad4(n) { return ('000' + n).slice(-4); }
+  function readSheets(file) {
+    return loadXlsx().then(function () { return file.arrayBuffer(); }).then(function (buf) {
+      var wb = window.XLSX.read(buf, { type: 'array' });
+      return wb.SheetNames.map(function (n) { return { name: n, rows: window.XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: null }) }; });
+    });
+  }
+  /* ---- 1. lista documenti InfoSHIP ---- */
+  function planDocs(rows, fname, pend) {
+    pend = pend || {};
+    var h = rows[0].map(function (x) { return xStr(x) || ''; }), ix = function (n) { return h.indexOf(n); };
+    var P = { kind: 'docs', file: fname, rows: 0, add: [], upd: [], same: 0, enr: 0, mark: [], skip: [], unknown: {}, sup: {} };
+    var hasTot = ix('Total') >= 0;
+    rows.slice(1).forEach(function (r) {
+      var id = xStr(r[ix('ID')]), orig = xStr(r[ix('Number')]); if (!id || !orig) return; P.rows++;
+      var nf0 = numFromOrig(orig), ship = xStr(r[ix('Ship')]);
+      if (!nf0 || !ship || ship === 'HQS' || !shipBy(ship)) { P.skip.push(orig); return; }
+      var stTxt = xStr(r[ix('Status')]), st = IMP_ST[stTxt]; if (!st) { P.unknown[stTxt] = (P.unknown[stTxt] || 0) + 1; return; }
+      var o = { id: id, type: nf0.type, num: nf0.num, orig: orig, ship: ship, desc: xStr(r[ix('Description')]) || '', isStatus: st, status: st, side: IMP_SIDE[xStr(r[ix('Edit Side')])] || 'office', dept: IMP_DEPT[xStr(r[ix('Department')])] || null, date: xDate(r[ix('Dates')]), terms: xStr(r[ix('Priority')]) };
+      if (nf0.kind && nf0.kind !== 'ship') o.rqKind = nf0.kind;
+      var due = ix('Latest<br>Delivery') >= 0 ? r[ix('Latest<br>Delivery')] : ix('Delivery<br>Date') >= 0 ? r[ix('Delivery<br>Date')] : ix('LD') >= 0 ? r[ix('LD')] : null; o.due = xDate(due);
+      if (ix('Quotation Limit') >= 0) o.limit = xDate(r[ix('Quotation Limit')]);
+      if (ix('Deliver to') >= 0) o.deliverTo = xStr(r[ix('Deliver to')]);
+      if (ix('Quote') >= 0) o.quote = xStr(r[ix('Quote')]);
+      var code = ix('Code') >= 0 ? xStr(r[ix('Code')]) : null, name = ix('Holder') >= 0 ? xStr(r[ix('Holder')]) : null;
+      if (name && o.type !== 'RQ') { var key = code || ('X-' + name.toUpperCase().replace(/\W+/g, '').slice(0, 10)); o.sup = key; if (!supById(key)) P.sup[key] = { id: key, name: name, cur: 'EUR' }; }
+      if (hasTot && (o.type === 'RFQ' || o.type === 'PO')) { o.cur = xStr(r[ix('VASIMBOL')]) === '$' ? 'USD' : 'EUR'; o.total = Math.round((+r[ix('Total')] || 0) * 100) / 100; if (o.sup && P.sup[o.sup]) P.sup[o.sup].cur = o.cur; }
+      if (pend[id]) { var pe = pend[id]; if (o.total != null) { pe.total = o.total; pe.cur = o.cur; } if (o.limit) pe.limit = o.limit; P.enr++; return; }
+      var d = byId(id);
+      if (!d) { pend[id] = o; if (!o.cur && (o.type === 'RFQ' || o.type === 'PO')) { var sp = supById(o.sup) || P.sup[o.sup]; o.cur = sp ? sp.cur : 'EUR'; } P.add.push(o); return; }
+      var ch = [];
+      if (d.isStatus !== st && d.status !== st) ch.push(['status', stLabel(d), ST[d.type][st] ? L2(ST[d.type][st]) : st]);
+      ['desc', 'due', 'limit', 'sup', 'deliverTo'].forEach(function (k) { if (o[k] != null && o[k] !== d[k]) ch.push([k, d[k] || '', o[k]]); });
+      if (hasTot && o.total != null && Math.abs((d.total || 0) - o.total) > 0.005) ch.push(['total', d.total || 0, o.total]);
+      if (ch.length) P.upd.push({ d: d, o: o, ch: ch }); else { P.same++; if (d.isStatus !== st) P.mark.push([d, st]); }
+    });
+    return P;
+  }
+  function applyDocs(P, at) {
+    Object.keys(P.sup).forEach(function (k) { if (!supById(k)) DB.suppliers.push(P.sup[k]); });
+    P.add.forEach(function (o) { o.log = [{ at: at, to: o.status, txt: L2(['Importato da InfoSHIP', 'Imported from InfoSHIP']) + ' · ' + (ST[o.type][o.status] ? L2(ST[o.type][o.status]) : o.status) }]; o.from = []; o.importedAt = at; DB.docs.push(o); });
+    P.mark.forEach(function (m) { m[0].isStatus = m[1]; });
+    P.upd.forEach(function (u) {
+      var d = u.d, o = u.o;
+      u.ch.forEach(function (c) { if (c[0] === 'status') { d.status = o.status; d.log = d.log || []; d.log.push({ at: at, to: o.status, txt: L2(['Da InfoSHIP: ', 'From InfoSHIP: ']) + c[1] + ' → ' + c[2] }); } else if (c[0] === 'total') { d.total = o.total; d.cur = o.cur; } else d[c[0]] = o[c[0]]; });
+      d.isStatus = o.status; ['side', 'dept', 'terms'].forEach(function (k) { if (o[k]) d[k] = o[k]; });
+    });
+    relink();
+  }
+  function relink() {
+    var key = function (o) { return o.ship + '|' + normDesc(o.desc); }, rq = {}, po = {};
+    DB.docs.forEach(function (o) { if (o.type === 'RQ' && !rq[key(o)]) rq[key(o)] = o.id; });
+    DB.docs.forEach(function (o) { if (o.type === 'PO' && o.status !== 'annullato') { var k = key(o) + '|' + (o.sup || ''); if (!po[k]) po[k] = o.id; } });
+    DB.docs.forEach(function (o) {
+      if (o.proto || (o.from && o.from.length)) return;
+      if (o.type === 'RFQ' || o.type === 'PO') { if (rq[key(o)]) o.from = [rq[key(o)]]; }
+      else if (o.type === 'DN') { var p = po[key(o) + '|' + (o.sup || '')]; o.from = p ? [p] : rq[key(o)] ? [rq[key(o)]] : []; }
+    });
+  }
+  /* ---- 2. budget InfoSHIP (Ship General Accounts) ---- */
+  function planBudget(rows, fname) {
+    var ship = null, hi = -1;
+    rows.forEach(function (r, i) { if (xStr(r[0]) === 'Ship' && r[2]) ship = xStr(r[2]); if (xStr(r[0]) === 'Path Code') hi = i; });
+    if (!ship || hi < 0) return null;
+    var lines = [];
+    rows.slice(hi + 1).forEach(function (r) { var p = xStr(r[0]); if (!p) return; lines.push({ path: p, code: xStr(r[1]) || '', type: xStr(r[2]), post: xStr(r[3]) === 'Y', desc: xStr(r[4]) || '', b: +r[5] || 0, o: +r[6] || 0, d: +r[7] || 0 }); });
+    var old = DB.budgets[ship] || {}, ob = 0, nb = 0, oo = 0, no = 0;
+    Object.keys(old).forEach(function (k) { ob += old[k].b; oo += old[k].o + old[k].d; });
+    lines.forEach(function (l) { if (l.post) { nb += l.b; no += l.o + l.d; } });
+    return { kind: 'budget', file: fname, ship: ship, lines: lines, before: [ob, oo], after: [nb, no] };
+  }
+  function applyBudget(P) {
+    var A = {}; DB.accounts.forEach(function (a) { A[a.path] = a; });
+    P.lines.forEach(function (l) { if (!A[l.path]) { A[l.path] = { path: l.path, code: l.code, desc: l.desc, cc: l.type === 'Cost Center', post: l.post }; DB.accounts.push(A[l.path]); } });
+    DB.accounts.forEach(function (a) { if (a.parent !== undefined) return; var parts = a.path.split('-'); a.parent = null; for (var i = parts.length - 1; i > 0; i--) { var c = parts.slice(0, i).join('-'); if (A[c]) { a.parent = c; break; } if (A[c + '-'] && c + '-' !== a.path) { a.parent = c + '-'; break; } } });
+    var B = {}; P.lines.forEach(function (l) { if (l.post && (l.b || l.o || l.d)) B[l.path] = { b: Math.round(l.b * 100) / 100, o: Math.round(l.o * 100) / 100, d: Math.round(l.d * 100) / 100 }; });
+    DB.budgets[P.ship] = B;
+  }
+  /* ---- 3. backup della dashboard operativa (todos + note) ---- */
+  function planDash(o, fname) {
+    var codeRe = /(\d{4}-[A-Z]{3}-(?:HQRQ|HQPO|HQDN|SHPR|HQPR|HQSR)-\d{5})|(?:HQRQ|HQPO|HQDN|HQPR|HQSR)-\d{5}|[A-Z]{3}-SHPR-\d{5}/g;
+    var byOrig = {}; DB.docs.forEach(function (d) { if (d.orig) byOrig[d.orig] = d; });
+    var findDocs = function (txt, ship) {
+      var out = []; (String(txt).match(codeRe) || []).forEach(function (c) {
+        var d = byOrig[c]; if (!d) { var m = c.match(/^([A-Z]{3})-SHPR-(\d{5})$/); Object.keys(byOrig).forEach(function (k) { if (!d && (k.slice(-c.length) === c) && (!ship || byOrig[k].ship === ship || m)) d = byOrig[k]; }); }
+        if (d && out.indexOf(d) < 0) out.push(d);
+      }); return out;
+    };
+    var tasks = [], hist = [], notes = [];
+    (o.todos || []).forEach(function (t) {
+      if (t.category === 'Personale' || t.category === 'Colleghi') return;
+      var ship = IMP_VES[(t.vessel || '').toLowerCase()] || null, txt = [t.reference, t.note, t.outlookLinkedName].join(' '), ds = findDocs(txt, ship);
+      if (!ship && ds[0]) ship = ds[0].ship;
+      var rec = { id: 'T-' + t.id, ship: ship, cat: t.category, action: t.action && t.action !== 'Altro' ? t.action : '', ref: t.reference || t.outlookLinkedName || '', note: t.note || '', due: t.dueDate || null, prio: t.priority === 'alta' || t.priority === 'high' ? 'alta' : 'media', url: t.outlookWebUrl || null, docs: ds.map(function (d) { return d.id; }), done: !!t.done, doneAt: t.doneAt ? String(t.doneAt).slice(0, 10) : null, at: String(t.createdAt || '').slice(0, 10) };
+      if (!t.done) tasks.push(rec); else if (ds.length) hist.push(rec);
+    });
+    Object.keys(o.notes || {}).forEach(function (k) {
+      var i = k.indexOf('::'), ship = IMP_VES[k.slice(0, i)], an = function (x) { return String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }, desc = an(k.slice(i + 2)), txt = o.notes[k];
+      if (!ship || !txt || /^\?+$/.test(txt.trim())) return;
+      var cand = DB.docs.filter(function (d) { return d.ship === ship && an(d.desc) === desc && (d.type === 'DN' || d.type === 'PO' || d.type === 'RQ'); }).sort(function (a, b) { return ({ DN: 0, PO: 1, RQ: 2 })[a.type] - ({ DN: 0, PO: 1, RQ: 2 })[b.type] || (a.date < b.date ? 1 : -1); });
+      notes.push({ ship: ship, desc: k.slice(i + 2), txt: txt, doc: cand[0] ? cand[0].id : null });
+    });
+    var known = {}; (DB.tasks || []).forEach(function (x) { known[x.id] = x; });
+    return { kind: 'dash', file: fname, tasks: tasks, hist: hist, notes: notes, newTasks: tasks.filter(function (x) { return !known[x.id]; }).length, closed: (DB.tasks || []).filter(function (x) { return !x.done && !tasks.some(function (y) { return y.id === x.id; }); }).length };
+  }
+  function applyDash(P, at) {
+    var open = {}; P.tasks.forEach(function (x) { open[x.id] = 1; });
+    var keep = (DB.tasks || []).filter(function (x) { return x.local; });
+    DB.tasks = keep.concat(P.tasks);
+    P.hist.forEach(function (x) { x.docs.forEach(function (id) { var d = byId(id); if (!d) return; d.log = d.log || []; var txt = L2(['Dashboard: ', 'Dashboard: ']) + [x.action, x.ref].filter(Boolean).join(' · '); if (!d.log.some(function (e) { return e.txt === txt && e.at === (x.doneAt || x.at); })) d.log.push({ at: x.doneAt || x.at, to: d.status, txt: txt, src: 'dash' }); d.log.sort(function (a, b) { return a.at < b.at ? -1 : a.at > b.at ? 1 : 0; }); }); });
+    P.notes.forEach(function (n) {
+      if (!n.doc) return; var d = byId(n.doc); d.track = d.track || { legs: [], events: [] }; d.track.events = d.track.events || [];
+      d.track.dashNote = n.txt;
+      var dhl = n.txt.match(/DHL[^0-9]{0,20}(\d{10})/i); if (dhl && !(d.track.legs || []).some(function (g) { return g.num === dhl[1]; })) { d.track.legs = d.track.legs || []; d.track.legs.push({ leg: L2(['Da dashboard', 'From dashboard']), carrier: 'DHL Express', num: dhl[1], from: supName(d.sup), to: '', events: [] }); }
+      var dest = n.txt.match(/->\s*([^\n]+)/); if (dest) d.track.dest = dest[1].trim();
+    });
+  }
+  /* ---- interfaccia ---- */
+  function planFile(f, pend) {
+    if (/\.json$/i.test(f.name)) return f.text().then(function (s) { var o = JSON.parse(s); if (o.todos) { var pd = planDash(o, f.name); pd.raw = o; return pd; } if (o.docs && o.meta) return { kind: 'full', file: f.name, data: o }; throw new Error('JSON ?'); });
+    return readSheets(f).then(function (sh) {
+      var r = sh[0].rows; if (!r.length) throw new Error('vuoto');
+      var h = (r[0] || []).map(function (x) { return xStr(x); });
+      if (h.indexOf('Number') >= 0 && h.indexOf('ID') >= 0 && h.indexOf('Status') >= 0) return planDocs(r, f.name, pend);
+      var b = planBudget(r, f.name); if (b) return b;
+      throw new Error(L2(['formato non riconosciuto', 'unknown format']));
+    });
+  }
+  function planHtml(P) {
+    if (P.err) return '<div class="t-bad">' + esc(P.file + ': ' + P.err) + '</div>';
+    if (P.kind === 'docs') {
+      var bt = function (arr) { var c = {}; arr.forEach(function (o) { c[o.type] = (c[o.type] || 0) + 1; }); return Object.keys(c).map(function (k) { return k + ' ' + c[k]; }).join(' · ') || '0'; };
+      var stc = P.upd.filter(function (u) { return u.ch.some(function (c) { return c[0] === 'status'; }); });
+      return '<div class="stack" style="gap:4px"><b>' + esc(P.file) + '</b><span class="mute" style="font-size:12px">' + esc(L2(['Lista documenti InfoSHIP', 'InfoSHIP document list'])) + ' · ' + P.rows + ' ' + esc(L2(['righe', 'rows'])) + '</span>' +
+        '<span>' + esc(L2(['Nuovi: ', 'New: '])) + '<b class="j">' + P.add.length + '</b> <span class="mute">(' + esc(bt(P.add)) + ')</span></span>' +
+        '<span>' + esc(L2(['Aggiornati: ', 'Updated: '])) + '<b class="j">' + P.upd.length + '</b>, ' + esc(L2(['di cui cambio stato ', 'status changes '])) + '<b class="j">' + stc.length + '</b> · ' + esc(L2(['invariati ', 'unchanged '])) + P.same + '</span>' +
+        (Object.keys(P.sup).length ? '<span>' + esc(L2(['Fornitori nuovi: ', 'New suppliers: '])) + Object.keys(P.sup).length + '</span>' : '') +
+        (P.enr ? '<span>' + esc(L2(['Completati con importi da un altro file: ', 'Enriched from another file: '])) + P.enr + '</span>' : '') + (P.skip.length ? '<span class="mute" style="font-size:12px">' + esc(L2(['Esclusi (non di una nave): ', 'Skipped (no vessel): '])) + P.skip.length + '</span>' : '') +
+        (Object.keys(P.unknown).length ? '<span class="t-warn" style="font-size:12px">' + esc(L2(['Stati non riconosciuti: ', 'Unknown statuses: ']) + Object.keys(P.unknown).map(function (k) { return k + ' (' + P.unknown[k] + ')'; }).join(', ')) + '</span>' : '') +
+        (stc.length ? '<details><summary style="cursor:pointer;font-size:12px">' + esc(L2(['Vedi i cambi di stato', 'See status changes'])) + '</summary><div class="log" style="max-height:200px;overflow:auto">' + stc.slice(0, 200).map(function (u) { var c = u.ch.filter(function (x) { return x[0] === 'status'; })[0]; return '<div><span class="j">' + esc(u.d.num) + '</span><span>' + esc(c[1] + ' → ' + c[2]) + '</span></div>'; }).join('') + '</div></details>' : '') + '</div>';
+    }
+    if (P.kind === 'budget') return '<div class="stack" style="gap:4px"><b>' + esc(P.file) + '</b><span class="mute" style="font-size:12px">' + esc(L2(['Budget InfoSHIP · nave ', 'InfoSHIP budget · vessel '])) + P.ship + '</span><span>' + esc(L2(['Budget annuo ', 'Annual budget '])) + money(P.before[0], 'EUR') + ' → <b>' + money(P.after[0], 'EUR') + '</b> · ' + esc(L2(['speso ', 'spent '])) + money(P.before[1], 'EUR') + ' → <b>' + money(P.after[1], 'EUR') + '</b></span></div>';
+    if (P.kind === 'dash') return '<div class="stack" style="gap:4px"><b>' + esc(P.file) + '</b><span class="mute" style="font-size:12px">' + esc(L2(['Backup dashboard operativa', 'Operations dashboard backup'])) + '</span><span>' + esc(L2(['Attività aperte: ', 'Open tasks: '])) + '<b class="j">' + P.tasks.length + '</b> (' + esc(L2(['nuove ', 'new '])) + P.newTasks + ', ' + esc(L2(['chiuse da allora ', 'closed since '])) + P.closed + ')</span><span>' + esc(L2(['Attività chiuse collegate a documenti: ', 'Closed tasks linked to documents: '])) + P.hist.length + '</span><span>' + esc(L2(['Note di spedizione: ', 'Shipping notes: '])) + P.notes.length + ', ' + esc(L2(['collegate a un documento ', 'linked to a document '])) + P.notes.filter(function (n) { return n.doc; }).length + '</span><span class="mute" style="font-size:12px">' + esc(L2(['Escluse le attività Personale e Colleghi.', 'Personal and Colleagues tasks excluded.'])) + '</span></div>';
+    if (P.kind === 'full') return '<div class="stack" style="gap:4px"><b>' + esc(P.file) + '</b><span class="t-warn">' + esc(L2(['Copia completa del prototipo: sostituisce tutti i dati attuali.', 'Full prototype copy: replaces all current data.'])) + '</span></div>';
+    return '';
+  }
+  CLICK.impfiles = function () {};
+  function importFiles(files) {
+    var arr = [].slice.call(files || []); if (!arr.length) return;
+    toast(L2(['Lettura dei file…', 'Reading files…']));
+    var pend = {};
+    arr.sort(function (a, b) { var r = function (f) { return /\.json$/i.test(f.name) ? 2 : /\.xls$/i.test(f.name) ? 1 : 0; }; return r(a) - r(b) || b.size - a.size; });
+    arr.reduce(function (pr, f) { return pr.then(function (acc) { return planFile(f, pend).catch(function (e) { return { file: f.name, err: e.message || String(e) }; }).then(function (P) { acc.push(P); return acc; }); }); }, Promise.resolve([])).then(function (plans) {
+      formModal(L2(['Aggiornamento dati', 'Data update']), '<div class="stack" style="gap:12px">' + plans.map(planHtml).join('<hr style="border:0;border-top:1px solid var(--line);width:100%">') + '</div>' +
+        '<div class="mute" style="font-size:12px">' + esc(L2(['InfoSHIP aggiorna testata e stato dei documenti. Righe, allegati, tracking, scelte di comparazione e documenti creati nel prototipo restano come sono. Puoi caricare file parziali: si aggiorna solo quello che contengono.', 'InfoSHIP updates header and status. Lines, attachments, tracking and prototype documents are kept. Partial files are fine.'])) + '</div>',
+        function () {
+          var at = TODAY, rep = [];
+          plans.forEach(function (P) {
+            if (P.err) return;
+            if (P.kind === 'full') { DB = P.data; rep.push('full'); return; }
+            if (P.kind === 'docs') { applyDocs(P, at); rep.push(P.file + ': +' + P.add.length + ' / ~' + P.upd.length); }
+            if (P.kind === 'budget') { applyBudget(P); rep.push(P.file + ': budget ' + P.ship); }
+            if (P.kind === 'dash') { P = Object.assign(planDash(P.raw, P.file), { raw: P.raw }); applyDash(P, at); rep.push(P.file + ': ' + P.tasks.length + ' ' + L2(['attività', 'tasks'])); }
+          });
+          if (rep[0] !== 'full') { DB.imports = DB.imports || []; DB.imports.unshift({ at: new Date().toISOString().slice(0, 16).replace('T', ' '), txt: rep.join(' · ') }); DB.meta.source = L2(['Dati InfoSHIP aggiornati al ', 'InfoSHIP data updated on ']) + fd(at); }
+          save(); render(); toast(L2(['Dati aggiornati', 'Data updated']));
+        }, { w: 720, ok: L2(['Applica', 'Apply']) });
+    });
+  }
+  function importCard() {
+    var h = (DB.imports || []).slice(0, 8);
+    return '<section class="card stack"><h2>' + esc(L2(['Aggiorna da InfoSHIP e dalla dashboard', 'Update from InfoSHIP and the dashboard'])) + '</h2>' +
+      '<div style="font-size:13px">' + esc(L2(['Carica uno o più file insieme: export lista documenti di InfoSHIP (.xlsx, anche parziali o di un solo tipo), export RFQ o PO con la colonna Total, report budget nave (.xls), backup della dashboard operativa (.json). Prima di applicare vedi cosa cambia.', 'Upload one or more files: InfoSHIP document list exports, RFQ/PO exports with Total, vessel budget report, dashboard backup. You see the changes before applying.'])) + '</div>' +
+      '<label class="btn pri" style="align-self:flex-start">' + esc(L2(['Scegli i file…', 'Choose files…'])) + '<input type="file" multiple accept=".xlsx,.xls,.json" data-act="impfiles" hidden></label>' +
+      (h.length ? '<div class="log">' + h.map(function (x) { return '<div><span class="j">' + esc(x.at) + '</span><span>' + esc(x.txt) + '</span></div>'; }).join('') + '</div>' : '') + '</section>';
+  }
+  /* ---- attività della dashboard in Da fare e sui documenti ---- */
+  function taskRows(nave) {
+    return (DB.tasks || []).filter(function (x) { return !x.done && (!nave || x.ship === nave); }).sort(function (a, b) { return (a.prio === 'alta' ? 0 : 1) - (b.prio === 'alta' ? 0 : 1) || ((a.due || '9') < (b.due || '9') ? -1 : 1); });
+  }
+  function taskRow(x) {
+    var d = x.docs && x.docs[0] && byId(x.docs[0]), late = x.due && x.due < TODAY;
+    return '<div class="qrow">' + (d ? '<a href="#/doc/' + d.id + '" class="j" style="font-size:12px;color:var(--teal);font-weight:600;white-space:nowrap">' + esc(d.num) + '</a>' : '<span class="mute" style="font-size:12px">—</span>') + (x.ship ? '<span class="code j">' + x.ship + '</span>' : '<span></span>') +
+      '<div style="min-width:0"><div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc([x.action, x.ref || x.note].filter(Boolean).join(' · ')) + '</div>' + (x.note && x.ref ? '<div class="mute" style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(x.note) + '</div>' : '') + '</div>' +
+      '<span class="j ' + (late ? 't-bad' : 'mute') + '" style="font-size:12px;white-space:nowrap">' + (x.due ? fd(x.due) : '') + '</span>' +
+      '<span style="display:flex;gap:6px;justify-content:flex-end">' + (x.prio === 'alta' ? '<span class="chip c-bad">' + esc(L2(['alta', 'high'])) + '</span>' : '') + (x.url ? '<a class="btn sm" href="' + esc(x.url) + '" target="_blank" rel="noopener">Outlook</a>' : '') + '<button class="btn sm ghost" data-act="taskdone" data-id="' + x.id + '">' + esc(L2(['Fatto', 'Done'])) + '</button></span></div>';
+  }
+  CLICK.taskdone = function (a) { var x = (DB.tasks || []).filter(function (y) { return y.id === a.getAttribute('data-id'); })[0]; if (!x) return; x.done = true; x.doneAt = TODAY; (x.docs || []).forEach(function (id) { var d = byId(id); if (d) { d.log = d.log || []; d.log.push({ at: TODAY, to: d.status, txt: L2(['Attività fatta: ', 'Task done: ']) + [x.action, x.ref].filter(Boolean).join(' · ') }); } }); save(); render(); };
+  function tasksSection(nave) {
+    var it = taskRows(nave); if (!it.length) return '';
+    var all = UI.qAll && UI.qAll.tasks;
+    return '<section class="card stack" style="gap:0"><h2 style="padding-bottom:8px">' + esc(L2(['Attività dalla dashboard', 'Tasks from the dashboard'])) + ' <span class="j mute">' + it.length + '</span></h2>' + it.slice(0, all ? 999 : 8).map(taskRow).join('') +
+      (it.length > 8 && !all ? '<button class="btn ghost sm" data-act="qmore" data-k="tasks" style="align-self:flex-start;margin-top:8px;color:var(--teal)">' + esc(L2(['Mostra tutte', 'Show all'])) + ' (' + it.length + ')</button>' : '') + '</section>';
+  }
+  function docTasks(d) {
+    var it = (DB.tasks || []).filter(function (x) { return !x.done && (x.docs || []).indexOf(d.id) >= 0; });
+    var note = d.track && d.track.dashNote;
+    if (!it.length && !note) return '';
+    return '<section class="card stack"><h2>' + esc(L2(['Dalla dashboard', 'From the dashboard'])) + '</h2>' + (note ? '<div class="note" style="color:var(--ink);white-space:pre-line">' + esc(note) + '</div>' : '') + it.map(taskRow).join('') + '</section>';
+  }
+
   /* ---------- render & events ---------- */
   function render() {
     var r = route(), s = r.seg, html;
@@ -2800,6 +3031,7 @@
     if (el.getAttribute('data-pldef')) { var pd = el.getAttribute('data-pldef').split('|'), dw = whOf(pd[0]); dw.placements.forEach(function (x, k) { x.default = k === +pd[1]; }); save(); render(); return; }
     if (el.getAttribute('data-plcan')) { var pc2 = el.getAttribute('data-plcan').split('|'), cw = whOf(pc2[0]); cw.placements[+pc2[1]].cancelled = el.checked; save(); render(); return; }
     if (el.getAttribute('data-nextport') || el.getAttribute('data-nexteta')) { var nsh = shipBy(el.getAttribute('data-nextport') || el.getAttribute('data-nexteta')); nsh.nextPort = nsh.nextPort || {}; if (el.getAttribute('data-nextport')) nsh.nextPort.name = el.value.trim(); else nsh.nextPort.eta = el.value; save(); render(); toast(L2(['Prossimo porto aggiornato', 'Next port updated'])); return; }
+    if (el.getAttribute('data-act') === 'impfiles') { importFiles(el.files); el.value = ''; return; }
     if (el.getAttribute('data-aset')) { aset(el.getAttribute('data-aset'), parseNum(el.value)); toast(L2(['Parametro salvato', 'Parameter saved'])); return; }
     if (el.getAttribute('data-asett')) { aset(el.getAttribute('data-asett'), el.value.trim()); toast(L2(['Parametro salvato', 'Parameter saved'])); return; }
     if (el.getAttribute('data-shpcost')) { var sp = shpById(route().seg[1]); if (sp) { var kk = el.getAttribute('data-shpcost'), am = parseNum(el.value); sp.costs = (sp.costs || []).filter(function (c) { return c.kind !== kk; }); if (am) sp.costs.push({ kind: kk, amount: am }); sp.log.push({ at: TODAY, to: sp.status, txt: L2(['Costo ', 'Cost ']) + kk + ' ' + nf(am) + ' €' }); save(); render(); } return; }
