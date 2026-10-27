@@ -265,11 +265,7 @@
   /* ---------- pages ---------- */
   function pageHome() {
     var k = kpiShip(null);
-    var tot = '<div class="kpis">' +
-      kpiBox(t('openRQ'), k.rq, k.rqTodo + ' ' + t('toWork'), 'warn', '#/docs' + qs({ tipo: 'RQ' })) +
-      kpiBox(t('rfqWait'), k.rfq, k.rfqLate + ' ' + t('overLimit'), k.rfqLate ? 'bad' : 'mute', '#/docs' + qs({ tipo: 'RFQ', stato: 'inviata' })) +
-      kpiBox(t('poOpen'), k.po, k.poLate + ' ' + t('late'), k.poLate ? 'bad' : 'mute', '#/docs' + qs({ tipo: 'PO', aperti: 1 })) +
-      kpiBox(t('dnOpen'), k.dn, t('notRecv'), 'mute', '#/docs' + qs({ tipo: 'DN', aperti: 1 })) + '</div>';
+    var tot = phaseBoxes('');
     var cards = DB.ships.map(shipCard).join('');
     var late = docs(function (d) { return d.type === 'PO' && isLate(d); }).sort(function (a, b) { return a.due < b.due ? -1 : 1; });
     var lateHtml = late.slice(0, 6).map(function (d) {
@@ -313,12 +309,7 @@
     var head = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div><h2>' + esc(s.name) + '</h2><span class="mute" style="font-size:12px">' + esc(t('kind_' + s.kind)) + '</span></div><span class="code j">' + s.code + '</span></div>';
     if (!s.infoship) return '<article class="ship">' + head + '<div class="empty">' + esc(t('noData')) + '</div><a class="btn" style="align-self:flex-start" href="#/nave/' + s.code + '">' + esc(t('openShip')) + ' →</a></article>';
     var k = kpiShip(s.code);
-    return '<article class="ship">' + head + '<div class="mini">' +
-      miniBox(t('openRQ'), k.rq, k.rqTodo + ' ' + t('toWork'), 'warn', '#/docs' + qs({ tipo: 'RQ', nave: s.code })) +
-      miniBox(t('rfqWait'), k.rfq, k.rfqLate + ' ' + t('overLimit'), k.rfqLate ? 'bad' : 'mute', '#/docs' + qs({ tipo: 'RFQ', nave: s.code, stato: 'inviata' })) +
-      miniBox(t('poOpen'), k.po, k.poLate + ' ' + t('late'), k.poLate ? 'bad' : 'mute', '#/docs' + qs({ tipo: 'PO', nave: s.code, aperti: 1 })) +
-      miniBox(t('dnOpen'), k.dn, t('notRecv'), 'mute', '#/docs' + qs({ tipo: 'DN', nave: s.code, aperti: 1 })) +
-      '</div>' + shipBudgetBlock(s.code) +
+    return '<article class="ship">' + head + phaseBoxes(s.code, true) + shipBudgetBlock(s.code) +
       '<a class="btn" style="align-self:flex-start;font-weight:700" href="#/nave/' + s.code + '">' + esc(t('openShip')) + ' →</a></article>';
   }
 
@@ -330,11 +321,7 @@
     } else {
       var k = kpiShip(code);
       var rec = docs(function (d) { return d.ship === code; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 12);
-      body = '<div class="kpis">' +
-        kpiBox(t('openRQ'), k.rq, k.rqTodo + ' ' + t('toWork'), 'warn', '#/docs' + qs({ tipo: 'RQ', nave: code })) +
-        kpiBox(t('rfqWait'), k.rfq, k.rfqLate + ' ' + t('overLimit'), k.rfqLate ? 'bad' : 'mute', '#/docs' + qs({ tipo: 'RFQ', nave: code, stato: 'inviata' })) +
-        kpiBox(t('poOpen'), k.po, k.poLate + ' ' + t('late') + ' · ' + nf(k.poVal, 0) + ' €', k.poLate ? 'bad' : 'mute', '#/docs' + qs({ tipo: 'PO', nave: code, aperti: 1 })) +
-        kpiBox(t('dnOpen'), k.dn, t('notRecv'), 'mute', '#/docs' + qs({ tipo: 'DN', nave: code, aperti: 1 })) + '</div>' +
+      body = phaseBoxes(code) +
         '<div class="row"><div class="grow stack">' + (DB.budgets[code] ? '<a class="card stack" href="#/budget?nave=' + code + '" style="text-decoration:none;color:var(--ink);max-width:560px"><h2 style="margin:0">' + esc(t('budget')) + ' 2026</h2>' + shipBudgetBlock(code) + '</a>' : '') +
         '<h2 style="margin:8px 0 0;font-size:15px">' + esc(t('recent')) + '</h2>' + gridTable(rec, ['num', 'type', 'desc', 'status', 'sup', 'date'], null, null) + '</div></div>';
     }
@@ -386,6 +373,7 @@
     return (d.num + ' ' + (d.orig || '') + ' ' + d.desc + ' ' + supName(d.sup)).toUpperCase().indexOf(q) >= 0;
   }
   function pageDocs(q) {
+    if (!q.tipo || q.tipo === 'PR') return pagePratiche(q);
     if (q.tipo === 'todo') return shell('docs', crumb([[t('fleet'), '#/'], [t('purchasing')]]), L2(['Da fare', 'To do']) + (q.nave ? ' · ' + q.nave : ''), todoBody(q));
     var tipo = q.tipo || 'RQ', nave = q.nave || '';
     var base = docs(function (d) { return !nave || d.ship === nave; });
@@ -488,7 +476,7 @@
       (d.rev ? '<span class="chip c-warn">Rev. ' + d.rev + '</span>' : '') +
       '<span style="flex:1"></span>' + moreMenu(d) + '</div>' +
       (UI.edit && UI.edit.id === d.id ? editHeader(d) : '<h1 class="h1">' + esc(d.desc || '—') + '</h1>' + (d.note ? '<div class="note">' + esc(d.note) + '</div>' : '')) + '</div>';
-    var body = '<div class="row">' + pathHtml + '<div class="grow stack" style="gap:14px">' + head + info +
+    var body = '<div class="row"><div class="grow stack" style="gap:14px">' + head + trackFull(d) + info +
       docTabs(d, { righe: lines, all: { RQ: 1, RFQ: 1, PO: 1, DN: 1, FT: 1 }[d.type] ? attSection(d) : null, sped: d.type === 'DN' ? (feat('qr') ? qrCard(d) : '') + logisticsCard(d) : null,
         cron: docTasks(d) + '<section class="card stack"><h2>' + esc(t('chain')) + '</h2><div class="chain">' + chainHtml + '</div></section><section class="card stack"><h2>' + esc(t('history')) + '</h2><div class="log">' + log + '</div></section>' }) +
       '</div><aside class="side">' + nextHtml + '</aside></div>';
@@ -906,7 +894,8 @@
       var rfqs = children(d.id).filter(function (x) { return x.type === 'RFQ'; });
       if (d.status === 'verifica') return [{ to: 'quotazione', l: ['Richiedi quotazioni ai fornitori', 'Request quotations'], form: 'rfq' }];
       if (d.status === 'quotazione' || d.status === 'quotata') {
-        var a = [];
+        var a = [], toSend = rfqs.filter(function (x) { return x.status === 'creata'; }).length;
+        if (toSend) a.push({ to: d.status, l: ['Invia le ' + toSend + ' RFQ (bozze Outlook)', 'Send the ' + toSend + ' RFQs (Outlook drafts)'], form: 'sendall' });
         if (d.award && Object.keys(d.award).length) a.push({ to: 'ordinata', l: ['Crea gli ordini dalla scelta', 'Create orders from selection'], form: 'orders' });
         else a.push({ to: 'quotata', l: ['Scegli le offerte nella comparazione', 'Pick offers in the comparison'], form: 'scroll' });
         a.push({ to: 'quotazione', l: ['Aggiungi un fornitore', 'Add a supplier'], form: 'rfq', sec: 1 });
@@ -919,14 +908,14 @@
       return base;
     }
     if (d.type === 'RFQ') {
-      if (d.status === 'creata') return [{ to: 'inviata', l: ['Prepara email e invia', 'Prepare email and send'], form: 'mail' }];
+      if (d.status === 'creata') return [{ to: 'inviata', l: ['Invia (bozza Outlook)', 'Send (Outlook draft)'], form: 'quicksend' }, { to: 'inviata', l: ['Email con anteprima…', 'Email with preview…'], form: 'mail', sec: 1 }];
       if (d.status === 'inviata') return [{ to: 'quotata', l: ['Registra offerta', 'Record offer'], form: 'offer2' }, { to: 'rifiutata', l: ['Il fornitore non quota', 'Vendor declines'], sec: 1 }];
       if (d.status === 'quotata') { var rq = d.from && byId(d.from[0]); return rq ? [{ to: 'quotata', l: ['Vai alla comparazione', 'Go to comparison'], form: 'gorq' }] : []; }
     }
     if (d.type === 'PO') {
       if (d.status === 'bozza') return [{ to: 'approvato', l: ['Approva ordine', 'Approve order'], form: 'approve' }];
-      if (d.status === 'approvato') return [{ to: 'inviato', l: ['Prepara email e invia', 'Prepare email and send'], form: 'mail' }];
-      var rs = d.needResend ? [{ to: d.status, l: ['Rimanda Rev. ' + d.rev + ' al fornitore', 'Resend Rev. ' + d.rev + ' to supplier'], form: 'mail', sec: d.status === 'finalizzato' ? 0 : 1 }] : [];
+      if (d.status === 'approvato') return [{ to: 'inviato', l: ['Invia (bozza Outlook)', 'Send (Outlook draft)'], form: 'quicksend' }, { to: 'inviato', l: ['Email con anteprima…', 'Email with preview…'], form: 'mail', sec: 1 }];
+      var rs = d.needResend ? [{ to: d.status, l: ['Rimanda Rev. ' + d.rev + ' al fornitore', 'Resend Rev. ' + d.rev + ' to supplier'], form: 'quicksend', sec: d.status === 'finalizzato' ? 0 : 1 }] : [];
       if (d.status === 'finalizzato') return rs.concat(poResidual(d).some(function (x) { return x > 0; }) ? [{ to: 'finalizzato', l: ['Merce pronta: crea consegna (DN)', 'Goods ready: create delivery note'], form: 'dn', sec: d.needResend ? 1 : 0 }] : []);
       return base.concat(rs);
     }
@@ -1051,19 +1040,22 @@
         '<label>' + esc(L2(['Fornitori (una RFQ per fornitore, nella sua valuta)', 'Suppliers (one RFQ each, in its currency)'])) + '<input type="search" name="flt" placeholder="' + esc(t('filterTxt')) + '"></label>' +
         '<div style="max-height:34vh;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:4px">' + list + '</div>' +
         '<div class="stack" style="gap:4px"><span class="mute" style="font-size:13px">' + esc(t('lines')) + '</span>' + lines + '</div>' +
-        '<label>' + esc(t('c_limit')) + '<input type="date" name="limit" value="' + addDays(TODAY, 7) + '"></label>',
+        '<label>' + esc(t('c_limit')) + '<input type="date" name="limit" value="' + addDays(TODAY, 7) + '"></label>' +
+        '<label style="flex-direction:row;gap:8px;color:var(--ink)"><input type="checkbox" name="now" checked> ' + esc(L2(['Invia subito: scarica le bozze Outlook e segna le RFQ come inviate', 'Send now: download Outlook drafts and mark RFQs as sent'])) + '</label>',
         function (f) {
           var chosen = [].slice.call(f.querySelectorAll('input[name=sup]:checked')).map(function (x) { return x.value; });
           var rows = [].slice.call(f.querySelectorAll('input[name=ln]:checked')).map(function (x) { return +x.value; });
           if (!chosen.length || !rows.length) { toast(L2(['Scegli almeno un fornitore e una riga', 'Pick at least one supplier and one row'])); return false; }
+          var made = [];
           chosen.forEach(function (sid) {
             var sp = supById(sid);
-            newDoc('RFQ', rq.ship, { status: 'creata', attachments: JSON.parse(JSON.stringify(rq.attachments || [])), desc: rq.desc, sup: sid, cur: sp.cur || 'EUR', fx: fx(), dept: rq.dept, limit: f.elements.limit.value, due: rq.due, demo: rq.demo, from: [rq.id],
-              lines: rq.lines.filter(function (l) { return rows.indexOf(l.row) >= 0; }).map(function (l) { return { row: l.row, src: l.row, item: l.item, code: l.code, impa: l.impa, desc: l.desc, note: l.note, uom: l.uom, qty: l.qty, asset: l.asset }; }) }, rq.num);
+            made.push(newDoc('RFQ', rq.ship, { status: 'creata', attachments: JSON.parse(JSON.stringify(rq.attachments || [])), desc: rq.desc, sup: sid, cur: sp.cur || 'EUR', fx: fx(), dept: rq.dept, limit: f.elements.limit.value, due: rq.due, demo: rq.demo, from: [rq.id],
+              lines: rq.lines.filter(function (l) { return rows.indexOf(l.row) >= 0; }).map(function (l) { return { row: l.row, src: l.row, item: l.item, code: l.code, impa: l.impa, desc: l.desc, note: l.note, uom: l.uom, qty: l.qty, asset: l.asset }; }) }, rq.num));
           });
           if (rq.status !== 'quotazione') setStatus(rq, 'quotazione', chosen.length + ' RFQ');
           else rq.log.push({ at: TODAY, to: 'quotazione', txt: '+' + chosen.length + ' RFQ' });
           save(); render(); toast(chosen.length + ' RFQ ' + L2(['create', 'created']));
+          if (f.elements.now && f.elements.now.checked) made.reduce(function (pr, r) { return pr.then(function () { return quickSend(r, 'inviata', true); }); }, Promise.resolve()).then(function () { save(); render(); toast(made.length + ' ' + L2(['RFQ inviate: bozze Outlook scaricate', 'RFQs sent: Outlook drafts downloaded'])); });
         }, { w: 640, onInput: function (e, f) { if (e.target.name === 'flt') { var q = e.target.value.toUpperCase(); [].forEach.call(f.querySelectorAll('.suprow'), function (r) { r.hidden = q && r.getAttribute('data-name').indexOf(q) < 0; }); } } });
     },
     mail: function (d, to) {
@@ -2481,9 +2473,9 @@
   var SEC = {
     acq: { act: ['docs', 'doc', 'fornitori'], tabs: function (r) {
       var nave = r.q.nave || '', base = docs(function (d) { return (!nave || d.ship === nave) && isOpen(d); });
-      var cur = r.seg[0] === 'fornitori' || r.seg[0] === 'fornitore' ? 'sup' : (r.q.tipo || 'RQ');
+      var cur = r.seg[0] === 'fornitori' || r.seg[0] === 'fornitore' ? 'sup' : (r.q.tipo || 'PR');
       var todo = todoCount(nave);
-      return [['todo', L2(['Da fare', 'To do']), '#/docs' + qs({ tipo: 'todo', nave: nave }), todo]].concat(['RQ', 'RFQ', 'PO', 'DN'].map(function (ty) { return [ty, t(ty), '#/docs' + qs({ tipo: ty, nave: nave }), base.filter(function (d) { return d.type === ty; }).length]; }))
+      return [['todo', L2(['Da fare', 'To do']), '#/docs' + qs({ tipo: 'todo', nave: nave }), todo], ['PR', L2(['Pratiche', 'Cases']), '#/docs' + qs({ tipo: 'PR', nave: nave }), phaseCounts(nave).c.slice(0, 4).reduce(function (a, b) { return a + b; }, 0)]].concat(['RFQ', 'PO', 'DN'].map(function (ty) { return [ty, t(ty), '#/docs' + qs({ tipo: ty, nave: nave }), base.filter(function (d) { return d.type === ty; }).length]; }))
         .concat([['sup', t('suppliers'), '#/fornitori', null]]).map(function (x) { x.push(x[0] === cur); return x; });
     } },
     log: { act: ['logistica', 'magazzino', 'documenti'], tabs: function (r) {
@@ -2508,7 +2500,7 @@
     var k = secOf(active);
     var E = [
       ['#/', 'fleet', t('fleet'), active === 'home' || active === 'ship'],
-      ['#/docs' + qs({ tipo: P.seat === 'office' ? 'todo' : 'RQ', nave: ship }), 'cart', t('purchasing'), k === 'acq'],
+      ['#/docs' + qs({ tipo: 'PR', nave: ship }), 'cart', t('purchasing'), k === 'acq'],
       ['#/logistica' + qs({ nave: ship }), 'box', L2(['Logistica', 'Logistics']), k === 'log' || active === 'logistica'],
       ['#/' + (P.seat === 'acc' ? 'contabilita' : 'budget' + qs({ nave: ship || 'PEP' })), 'chart', t('budget'), k === 'bud']
     ];
@@ -2930,8 +2922,141 @@
     return '<section class="card stack"><h2>' + esc(L2(['Dalla dashboard', 'From the dashboard'])) + '</h2>' + (note ? '<div class="note" style="color:var(--ink);white-space:pre-line">' + esc(note) + '</div>' : '') + it.map(taskRow).join('') + '</section>';
   }
 
+
+  /* =====================================================================
+     PRATICA: dalla richiesta di bordo alla consegna in 5 fasi
+     ===================================================================== */
+  var PH = [['req', ['Richiesta', 'Request']], ['quo', ['Quotazioni', 'Quotations']], ['ord', ['Ordine', 'Order']], ['shp', ['Spedizione', 'Shipping']], ['brd', ['A bordo', 'On board']]];
+  function kidsOf(id) {
+    if (!UI.kids) { UI.kids = {}; DB.docs.forEach(function (d) { (d.from || []).forEach(function (p) { (UI.kids[p] = UI.kids[p] || []).push(d); }); }); }
+    return UI.kids[id] || [];
+  }
+  function rootOf(d) { var cur = d, g = 0; while (cur && cur.from && cur.from.length && g < 6) { var p = byId(cur.from[0]); if (!p) break; cur = p; g++; } return cur; }
+  function chainOf(root) { var out = [root], seen = {}; seen[root.id] = 1; for (var i = 0; i < out.length; i++) kidsOf(out[i].id).forEach(function (c) { if (!seen[c.id]) { seen[c.id] = 1; out.push(c); } }); return out; }
+  function pratica(root) {
+    var all = chainOf(root), of = function (t) { return all.filter(function (d) { return d.type === t; }); };
+    var rq = root.type === 'RQ' ? root : null, rfq = of('RFQ').filter(function (d) { return d.status !== 'annullata'; }), po = of('PO').filter(function (d) { return d.status !== 'annullato'; }), dn = of('DN').filter(function (d) { return d.status !== 'annullata'; });
+    var p = { root: root, all: all, rq: rq, rfq: rfq, po: po, dn: dn, ph: 0, state: 'open', det: '', who: '', late: all.some(function (d) { return isOpen(d) && isLate(d) && !d.stale; }) };
+    var since = function (ds) { var m = ds.reduce(function (x, d) { return d.date && d.date > x ? d.date : x; }, ''); return m ? Math.max(0, daysBetween(m, TODAY)) : 0; };
+    var openDn0 = dn.filter(isOpen);
+    p.age = openDn0.length ? since(openDn0) : po.length ? since(po) : rfq.length ? since(rfq) : since([root]);
+    if ((rq && NEG[rq.status] && !po.length) || (!rq && NEG[root.status])) { p.state = 'cancel'; p.ph = rfq.length ? 1 : 0; p.det = stLabel(root); return p; }
+    if (dn.length && dn.every(function (d) { return d.status === 'ricevuta'; }) && po.every(function (x) { return x.status === 'finalizzato'; })) {
+      p.ph = 4; p.state = 'done'; var r = dn.map(function (d) { var e = (d.log || []).filter(function (x) { return x.to === 'ricevuta'; }).pop(); return e ? e.at : d.date; }).sort().pop();
+      p.det = L2(['Ricevuto a bordo', 'Received on board']) + (r ? ' ' + fd(r) : ''); return p;
+    }
+    var openDn = dn.filter(isOpen);
+    if (openDn.length || po.some(function (x) { return x.status === 'finalizzato'; })) {
+      p.ph = 3;
+      if (openDn.length) { var d0 = openDn[0], st = stageOf(d0); p.det = L2(STAGES[stageIdx(st)][1]) + (d0.track && d0.track.dest ? ' → ' + d0.track.dest : '') + (openDn.length > 1 ? ' · ' + openDn.length + ' DN' : ''); p.who = /prep|pronta|ferma/.test(st) ? L2(['Fornitore', 'Supplier']) : /hub/.test(st) ? L2(['Spedizioniere', 'Forwarder']) : L2(['Nave', 'Vessel']); }
+      else { p.det = L2(['Merce in preparazione', 'Goods in preparation']); p.who = L2(['Fornitore', 'Supplier']); }
+      return p;
+    }
+    if (po.length) {
+      p.ph = 2; var b = po.filter(function (x) { return x.status === 'bozza'; }), a = po.filter(function (x) { return x.status === 'approvato' || x.needResend; });
+      p.det = po[0].num + ' · ' + supName(po[0].sup) + (po.length > 1 ? ' +' + (po.length - 1) : '');
+      p.who = b.length ? L2(['Ufficio: approvare', 'Office: approve']) : a.length ? L2(['Ufficio: inviare', 'Office: send']) : L2(['Fornitore', 'Supplier']);
+      return p;
+    }
+    if (rfq.length || (rq && (rq.status === 'quotazione' || rq.status === 'quotata'))) {
+      p.ph = 1; var q = rfq.filter(function (x) { return x.status === 'quotata'; }).length, toSend = rfq.filter(function (x) { return x.status === 'creata'; }).length;
+      p.det = q + '/' + rfq.length + ' ' + L2(['offerte', 'offers']); p.who = toSend ? L2(['Ufficio: inviare RFQ', 'Office: send RFQs']) : q ? L2(['Ufficio: scegliere', 'Office: choose']) : L2(['Fornitori', 'Suppliers']);
+      return p;
+    }
+    p.ph = 0; var s = root.status;
+    p.det = stLabel(root); p.who = s === 'bozza' ? L2(['Bordo', 'Vessel']) : L2(['Ufficio', 'Office']);
+    return p;
+  }
+  function trackMini(p) {
+    return '<span class="trk">' + PH.map(function (x, i) { var c = i < p.ph || p.state === 'done' ? 'd' : i === p.ph ? (p.state === 'cancel' ? 'x' : p.late ? 'l' : 'c') : ''; return '<i class="' + c + '" title="' + esc(L2(x[1])) + '"></i>'; }).join('') + '</span>';
+  }
+  function docChip(d, cur) {
+    var tone = TONE[d.status] || 'neutral', lab = d.type === 'RFQ' || d.type === 'PO' ? supName(d.sup).split(/[\s,.]/)[0] : d.type === 'DN' ? L2(STAGES[stageIdx(stageOf(d))][1]) : stLabel(d);
+    return '<a href="#/doc/' + d.id + '" class="dchip c-' + tone + (cur ? ' me' : '') + '" title="' + esc(d.num + ' · ' + stLabel(d) + (d.sup ? ' · ' + supName(d.sup) : '')) + '"><span class="j">' + esc(d.num.split('-').slice(-2).join('-')) + '</span> ' + esc(lab) + '</a>';
+  }
+  function trackFull(cur) {
+    var root = rootOf(cur), p = pratica(root), col = function (i) {
+      var ds = i === 0 ? [p.rq || root].filter(function (d) { return d.type === 'RQ'; }) : i === 1 ? p.rfq : i === 2 ? p.po : i === 3 ? p.dn.filter(isOpen) : p.dn.filter(function (d) { return d.status === 'ricevuta'; });
+      var cls = p.state === 'done' || i < p.ph ? 'done' : i === p.ph ? (p.state === 'cancel' ? 'cancel' : p.late ? 'late' : 'cur') : '';
+      return '<div class="ph ' + cls + '"><div class="phh"><span class="dot"></span><b>' + esc(L2(PH[i][1])) + '</b></div>' +
+        (i === p.ph && p.state !== 'done' ? '<div class="phd">' + esc(p.det) + (p.who ? '<br><span class="mute">' + esc(L2(['Tocca a: ', 'Owner: ']) + p.who) + '</span>' : '') + '</div>' : '') +
+        '<div class="phc">' + ds.slice(0, 6).map(function (d) { return docChip(d, d.id === cur.id); }).join('') + (ds.length > 6 ? '<span class="mute" style="font-size:11px">+' + (ds.length - 6) + '</span>' : '') + '</div></div>';
+    };
+    return '<section class="card ptrack">' + PH.map(function (x, i) { return col(i); }).join('') + '</section>';
+  }
+  function roots(nave) {
+    return DB.docs.filter(function (d) { return d.type !== 'FT' && d.type !== 'CS' && d.type !== 'INV' && (!nave || d.ship === nave) && !(d.from && d.from.length && byId(d.from[0])); });
+  }
+  function phaseCounts(nave) {
+    var c = [0, 0, 0, 0, 0], late = [0, 0, 0, 0, 0];
+    roots(nave).forEach(function (r) { if (r.stale) return; var p = pratica(r); if (p.state !== 'open') return; c[p.ph]++; if (p.late) late[p.ph]++; });
+    return { c: c, late: late };
+  }
+  function phaseBoxes(nave, compact) {
+    var k = phaseCounts(nave);
+    return '<div class="phbox' + (compact ? ' sm' : '') + '">' + PH.slice(0, 4).map(function (x, i) {
+      return '<a href="#/docs' + qs({ tipo: 'PR', nave: nave, fase: x[0] }) + '"><span class="l">' + esc(L2(x[1])) + '</span><span class="n j">' + k.c[i] + '</span>' + (k.late[i] ? '<span class="s t-bad">' + k.late[i] + ' ' + esc(t('late')) + '</span>' : '<span class="s mute">' + esc(L2(['in corso', 'open'])) + '</span>') + '</a>';
+    }).join('') + '</div>';
+  }
+  function pagePratiche(q) {
+    var nave = q.nave || '', fase = q.fase || '', list = roots(nave).filter(function (r) { return !r.stale; }).map(pratica);
+    var open = list.filter(function (p) { return p.state === 'open'; });
+    var shown = (q.chiusi ? list : open).filter(function (p) { return (!fase || PH[p.ph][0] === fase) && (!q.q || matchQ(p.root, q.q) || p.all.some(function (d) { return matchQ(d, q.q); })) && (!q.late || p.late); })
+      .sort(function (a, b) { return (b.late ? 1 : 0) - (a.late ? 1 : 0) || b.ph - a.ph || a.age - b.age; });
+    var cnt = [0, 0, 0, 0, 0]; open.forEach(function (p) { cnt[p.ph]++; });
+    var chips = '<div class="shippick" style="margin:0"><a class="' + (!fase ? 'on' : '') + '" href="#/docs' + qs({ tipo: 'PR', nave: nave, chiusi: q.chiusi }) + '">' + esc(L2(['Tutte le fasi', 'All phases'])) + ' ' + open.length + '</a>' + PH.slice(0, 4).map(function (x, i) { return '<a class="' + (fase === x[0] ? 'on' : '') + '" href="#/docs' + qs({ tipo: 'PR', nave: nave, fase: x[0], chiusi: q.chiusi }) + '">' + esc(L2(x[1])) + ' ' + cnt[i] + '</a>'; }).join('') + '</div>';
+    var shipOpts = DB.ships.map(function (s) { return '<option value="' + s.code + '"' + (nave === s.code ? ' selected' : '') + '>' + s.code + ' · ' + esc(s.name) + '</option>'; }).join('');
+    var filt = '<div class="filters"><select data-filter="nave" aria-label="' + esc(t('c_ship')) + '"><option value="">' + esc(t('allShips')) + '</option>' + shipOpts + '</select>' +
+      '<input type="search" data-filter="q" value="' + esc(q.q || '') + '" placeholder="' + esc(L2(['Cerca numero, descrizione, fornitore', 'Search number, description, supplier'])) + '">' +
+      '<label class="tog"><input type="checkbox" data-filter="late"' + (q.late ? ' checked' : '') + '> ' + esc(t('onlyLate')) + '</label>' +
+      '<label class="tog"><input type="checkbox" data-filter="chiusi"' + (q.chiusi ? ' checked' : '') + '> ' + esc(L2(['Mostra chiuse', 'Show closed'])) + '</label>' +
+      '<span style="flex:1"></span><span class="mute j" style="font-size:12px">' + shown.length + ' ' + esc(L2(['pratiche', 'cases'])) + '</span><button class="btn pri sm" data-act="newrq" data-ship="' + nave + '">' + esc(L2(['Nuova richiesta', 'New requisition'])) + '</button></div>';
+    var rows = shown.slice(0, UI.prAll ? 2000 : 150).map(function (p) {
+      var r = p.root;
+      return '<a class="prow" href="#/doc/' + r.id + '"><span class="j" style="color:var(--teal);font-weight:600;font-size:12px;white-space:nowrap">' + esc(r.num) + '</span>' + COLS.ship.v(r) +
+        '<span style="min-width:0"><b style="display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(r.desc) + '</b><span class="mute" style="font-size:12px">' + esc(p.det) + '</span></span>' +
+        trackMini(p) + '<span style="font-size:12px;white-space:nowrap">' + (p.state === 'open' ? '<b>' + esc(L2(PH[p.ph][1])) + '</b>' + (p.who ? '<br><span class="mute">' + esc(p.who) + '</span>' : '') : '<span class="' + (p.state === 'cancel' ? 't-bad' : 't-ok') + '">' + esc(p.state === 'cancel' ? L2(['Annullata', 'Cancelled']) : L2(['Completata', 'Completed'])) + '</span>') + '</span>' +
+        '<span class="j ' + (p.late ? 't-bad' : 'mute') + '" style="font-size:12px;white-space:nowrap;text-align:right">' + (p.late ? esc(t('late')) + '<br>' : '') + p.age + ' gg</span></a>';
+    }).join('');
+    return shell('docs', crumb([[t('fleet'), '#/'], [t('purchasing')]]), L2(['Pratiche', 'Cases']) + (nave ? ' · ' + nave : ''),
+      chips + filt + '<div class="card" style="padding:0">' + (rows || '<div class="empty" style="margin:14px">' + esc(t('noResults')) + '</div>') + '</div>' +
+      (shown.length > 150 && !UI.prAll ? '<button class="btn sm" data-act="prall">' + esc(L2(['Mostra tutte', 'Show all'])) + ' (' + shown.length + ')</button>' : '') +
+      '<div class="mute" style="font-size:12px">' + esc(L2(['Una pratica è la richiesta con tutto quello che ne nasce: RFQ, ordini, consegne. Le fasi: Richiesta → Quotazioni → Ordine → Spedizione → A bordo.', 'A case is the requisition with everything that follows.'])) + '</div>');
+  }
+  CLICK.prall = function () { UI.prAll = 1; render(); };
+
+  /* ---------- invio rapido: bozza Outlook + segnato inviato in un clic ---------- */
+  function quickSend(d, to, silent) {
+    var M = mailParts(d);
+    var picks = (d.attachments || []).filter(function (x) { return x.file; }), extra = [];
+    return Promise.all(picks.map(function (x) { return fileBlob(x.file).then(function (b) { return new Promise(function (ok) { var fr = new FileReader(); fr.onload = function () { extra.push({ name: (x.file && x.file.name) || x.name, type: b.type || x.file.type, b64: String(fr.result).split(',')[1] }); ok(); }; fr.readAsDataURL(b); }); }).catch(function () {}); }))
+      .then(loadPdfLib).then(function () {
+        var pdf = buildPdf(d).output('datauristring').split(',')[1];
+        saveBlob(new Blob([buildEml(M.to, M.subj, M.body.replace(/\n/g, '\r\n'), pdf, M.name, extra)], { type: 'message/rfc822' }), M.name.replace(/\.pdf$/, '.eml'));
+        if (d.needResend && d.status === to) { d.needResend = false; d.log.push({ at: TODAY, to: to, txt: 'Rev. ' + d.rev + ' ' + L2(['rinviata', 'resent']) + ' · ' + M.name }); }
+        else setStatus(d, to, L2(['bozza Outlook', 'Outlook draft']) + ' · ' + M.name);
+        if (d.type === 'RFQ') d.sentAt = TODAY;
+        if (!silent) { save(); render(); toast(L2(['Bozza scaricata e documento segnato come inviato', 'Draft downloaded, document marked as sent'])); }
+      }).catch(function () { toast(L2(['Libreria PDF non disponibile', 'PDF library not available'])); });
+  }
+  FORMS.quicksend = function (d, to) { quickSend(d, to); };
+  FORMS.sendall = function () { CLICK.sendall(); };
+  CLICK.sendall = function () {
+    var rq = curDoc(); if (!rq) return; var list = kidsOf(rq.id).filter(function (x) { return x.type === 'RFQ' && x.status === 'creata'; });
+    list.reduce(function (pr, r) { return pr.then(function () { return quickSend(r, 'inviata', true); }); }, Promise.resolve()).then(function () { save(); render(); toast(list.length + ' ' + L2(['RFQ inviate: bozze Outlook scaricate', 'RFQs sent: Outlook drafts downloaded'])); });
+  };
+  function mailParts(d) {
+    var sh = shipBy(d.ship), rq = d.from && byId(d.from[0]), sp = supById(d.sup) || {};
+    var subj = 'M/V ' + sh.name + ' · ' + (d.type === 'RFQ' ? 'RFQ ' : 'PURCHASE ORDER ') + d.num + (d.rev ? ' REV. ' + d.rev : '') + (rq && d.type === 'RFQ' ? ' · ' + rq.num : '') + ' · ' + (sp.name || '');
+    var body = d.type === 'RFQ'
+      ? 'Dear Sirs,\n\nPlease find attached our Request for Quotation ' + d.num + ' for M/V ' + sh.name + '.\nKindly revert by ' + fd(d.limit) + ' with your best offer, stating price, availability, delivery time, place of origin / stock and condition (Genuine, Non genuine or Reconditioned) for each item.' + (feat('link') ? '\nYou can also enter your quotation online at:\n' + supLink(d) : '') + '\n\nThis inquiry is a request for quotation only and is NOT a purchase order. Kindly quote our RFQ number in all correspondence.\n\nBest regards'
+      : 'Dear Sirs,\n\nPlease find attached our Purchase Order ' + d.num + (d.rev ? ' Rev. ' + d.rev + ', which supersedes the previous version' : '') + ' for M/V ' + sh.name + (d.offerRef ? ', as per your quotation ' + d.offerRef : '') + '.\nKindly confirm acceptance, delivery date and dispatch details by return.\n\nBest regards';
+    return { subj: subj, body: body, to: sp.email || '', name: pdfName(d) };
+  }
+
   /* ---------- render & events ---------- */
   function render() {
+    UI.kids = null;
     var r = route(), s = r.seg, html;
     if (s[0] === 'offerta' || s[0] === 'ricevi') { root.innerHTML = s[0] === 'offerta' ? pageSupplierQuote(s[1]) : pageReceive(s[1]); document.documentElement.lang = P.lang; afterRender(); return; }
     if (!s.length) html = feat('oggi') ? pageToday(r.q) : pageHome();
