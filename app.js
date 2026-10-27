@@ -474,7 +474,7 @@
       (isLate(d) ? '<span class="chip c-bad">' + esc(t('late')) + '</span>' : '') +
       (d.prio && d.prio !== 'normale' ? '<span class="chip c-bad">' + esc(L2(PRIO[d.prio])) + '</span>' : '') + (d.demo ? '<span class="chip c-acc">DEMO</span>' : '') +
       (d.rev ? '<span class="chip c-warn">Rev. ' + d.rev + '</span>' : '') +
-      '<span style="flex:1"></span>' + moreMenu(d) + '</div>' +
+      '<span style="flex:1"></span>' + ({ RQ: 1, RFQ: 1, PO: 1, DN: 1 }[d.type] ? '<button class="btn sm" data-act="pdf" title="' + esc(L2(['Anteprima, stampa o PDF', 'Preview, print or PDF'])) + '">' + esc(L2(['Stampa / PDF', 'Print / PDF'])) + '</button>' : '') + moreMenu(d) + '</div>' +
       (UI.edit && UI.edit.id === d.id ? editHeader(d) : '<h1 class="h1">' + esc(d.desc || '—') + '</h1>' + (d.note ? '<div class="note">' + esc(d.note) + '</div>' : '')) + '</div>';
     var body = '<div class="row"><div class="grow stack" style="gap:14px">' + head + trackFull(d) + info +
       docTabs(d, { righe: lines, all: { RQ: 1, RFQ: 1, PO: 1, DN: 1, FT: 1 }[d.type] ? attSection(d) : null, sped: d.type === 'DN' ? (feat('qr') ? qrCard(d) : '') + logisticsCard(d) : null,
@@ -1430,13 +1430,15 @@
     PO: { title: 'PURCHASE ORDER', intro: 'Dear Sirs,\nPlease supply the items listed below as per your quotation and the terms of this order. Kindly confirm acceptance and delivery date by return.',
       closing: 'Invoice to be issued only after delivery on board and receipt of the signed delivery note. Please quote our PO number on the invoice and on all documents.',
       clauses: 'All items must be asbestos free as per SOLAS regulation II-1/3-5 and supplied with MD/SDoC.\nEach package to be marked with vessel name and PO number.',
-      cols: { impa: 1, note: 1, asset: 1, cond: 1 } }
+      cols: { impa: 1, note: 1, asset: 1, cond: 1 } },
+    RQ: { title: 'PURCHASE REQUISITION', intro: '', closing: '', clauses: '', cols: { impa: 1, note: 1, asset: 1 } },
+    DN: { title: 'DELIVERY NOTE', intro: 'Goods delivered to the vessel as listed below. Kindly check, sign and stamp on receipt and return a copy to the purchasing office.', closing: '', clauses: '', cols: { impa: 1, note: 1 } }
   };
   function tpl() {
     var s = DB.settings || {}, o = JSON.parse(JSON.stringify(TPL_DEF));
     ['company', 'invoiceTo'].forEach(function (k) { if (s[k]) for (var x in s[k]) o[k][x] = s[k][x]; });
     ['color', 'logo', 'footer'].forEach(function (k) { if (s[k] != null) o[k] = s[k]; });
-    ['RFQ', 'PO'].forEach(function (k) { if (s[k]) { for (var x in s[k]) if (x !== 'cols') o[k][x] = s[k][x]; if (s[k].cols) o[k].cols = s[k].cols; } });
+    ['RFQ', 'PO', 'RQ', 'DN'].forEach(function (k) { if (s[k]) { for (var x in s[k]) if (x !== 'cols') o[k][x] = s[k][x]; if (s[k].cols) o[k].cols = s[k].cols; } });
     return o;
   }
   var libP = null;
@@ -1452,7 +1454,7 @@
   function pdfMoney(v, cur) { return (v || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (cur === 'USD' ? ' USD' : ' EUR'); }
   function pdfDate(s) { return s ? fd(s) : '-'; }
   function buildPdf(d) {
-    var T = tpl(), K = T[d.type], col = hexRgb(T.color), sh = shipBy(d.ship), sp = supById(d.sup) || {}, rq = null;
+    var T = tpl(), K = T[d.type] || T.RQ, LN = d.lines || [], col = hexRgb(T.color), sh = shipBy(d.ship), sp = supById(d.sup) || {}, rq = null;
     var cur = d.from && d.from[0] ? byId(d.from[0]) : null; while (cur && cur.type !== 'RQ' && cur.from && cur.from[0]) cur = byId(cur.from[0]); if (cur && cur.type === 'RQ') rq = cur;
     var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), W = 210, M = 14, y = 14;
     doc.setFont('helvetica', 'normal');
@@ -1478,10 +1480,13 @@
       var yy = y + 4.5; lines.forEach(function (l, i) { doc.setFont('helvetica', i === 0 ? 'bold' : 'normal'); var tl = doc.splitTextToSize(pdfTxt(l), w); doc.text(tl, x, yy); yy += tl.length * 4; });
       return yy;
     }
-    var y1 = box(M, 85, 'Supplier', [sp.name || '', sp.email || '']);
-    var info = [['Vessel', 'M/V ' + sh.name], ['Requisition', rq ? rq.num : '-'], ['Department', d.dept && L[d.dept] ? L[d.dept][1] : (d.dept || '-')], ['Currency', d.cur || '-']];
+    var po0 = d.type === 'DN' && d.from && byId(d.from[0]);
+    var y1 = d.type === 'RQ' ? box(M, 85, 'Requested by', ['M/V ' + sh.name, d.dept && L[d.dept] ? L[d.dept][1] + ' department' : '']) : box(M, 85, 'Supplier', [sp.name || '', sp.email || '']);
+    var info = d.type === 'RQ' ? [['Vessel', 'M/V ' + sh.name], ['Requisition date', pdfDate(d.date)], ['Required on board', pdfDate(d.due)], ['Status', ST.RQ[d.status] ? ST.RQ[d.status][1] : d.status], ['InfoSHIP ref.', d.orig || '-']]
+      : d.type === 'DN' ? [['Vessel', 'M/V ' + sh.name], ['Purchase order', po0 ? po0.num : '-'], ['Requisition', rq ? rq.num : '-'], ['Deliver to', d.deliverTo || (d.hub || '-')], ['ETA on board', pdfDate(d.due)], ['Status', ST.DN[d.status] ? ST.DN[d.status][1] : d.status]]
+      : [['Vessel', 'M/V ' + sh.name], ['Requisition', rq ? rq.num : '-'], ['Department', d.dept && L[d.dept] ? L[d.dept][1] : (d.dept || '-')], ['Currency', d.cur || '-']];
     if (d.type === 'RFQ') info.push(['Quotation limit', pdfDate(d.limit)], ['Required on board', pdfDate(d.due || (rq && rq.due))]);
-    else info.push(['Delivery', pdfDate(d.due)], ['Terms', d.terms || '-'], ['Your quotation', d.offerRef || '-']);
+    else if (d.type === 'PO') info.push(['Delivery', pdfDate(d.due)], ['Terms', d.terms || '-'], ['Your quotation', d.offerRef || '-']);
     doc.setFontSize(8.5); var yi = y;
     info.forEach(function (r) { doc.setTextColor(110, 110, 110); doc.text(pdfTxt(r[0]), 112, yi); doc.setTextColor(30, 30, 30); var tl = doc.splitTextToSize(pdfTxt(r[1]), 52); doc.text(tl, 144, yi); yi += Math.max(1, tl.length) * 4; });
     y = Math.max(y1, yi) + 2;
@@ -1491,15 +1496,15 @@
     var it = doc.splitTextToSize(pdfTxt(K.intro || ''), W - 2 * M); doc.text(it, M, y); y += it.length * 4 + 3;
     // table
     var C = JSON.parse(JSON.stringify(K.cols || {})), head = ['Row'], body = [];
-    if (!d.lines.some(function (l) { return l.asset; })) C.asset = 0;
-    if (d.type === 'PO' && !d.lines.some(function (l) { return l.cond; })) C.cond = 0;
+    if (!LN.some(function (l) { return l.asset; })) C.asset = 0;
+    if (d.type === 'PO' && !LN.some(function (l) { return l.cond; })) C.cond = 0;
     if (C.impa) head.push('Code');
     head.push('Description');
     if (C.asset) head.push('Asset');
     head.push('Qty', 'UOM');
     if (d.type === 'PO') { head.push('Unit price', 'Disc.', 'Amount'); if (C.cond) head.push('Cond.'); }
     else if (C.fill) head.push('Unit price', 'Disc.', 'LT days', 'Cond.');
-    d.lines.forEach(function (l) {
+    LN.forEach(function (l) {
       var r = [String(l.row)];
       if (C.impa) r.push(l.impa || (l.code && l.code !== 'GI0001' ? l.code : ''));
       var cd0 = C.impa ? (l.impa || (l.code && l.code !== 'GI0001' ? l.code : '')) : '', nt0 = (l.note || '').split(' · ').filter(function (x) { return !cd0 || x.trim() !== 'P/N ' + cd0; }).join(' · ');
@@ -1510,6 +1515,8 @@
       else if (C.fill) r.push('', '', '', '');
       body.push(r);
     });
+    if (d.type === 'DN') { head.push('Received'); body.forEach(function (r) { r.push(''); }); }
+    if (!body.length) body.push([{ content: pdfTxt('Lines not available in this copy (InfoSHIP list export: header only).'), colSpan: head.length, styles: { textColor: [120, 120, 120], fontStyle: 'italic' } }]);
     doc.autoTable({ startY: y, head: [head], body: body, margin: { left: M, right: M }, theme: 'grid',
       styles: { font: 'helvetica', fontSize: 8, cellPadding: 1.6, lineColor: [210, 210, 210], lineWidth: 0.2, textColor: [30, 30, 30], valign: 'top' },
       headStyles: { fillColor: col, textColor: [255, 255, 255], fontStyle: 'bold' },
@@ -1517,7 +1524,7 @@
       didParseCell: function (c) { if (c.section === 'head' && /Qty|Unit price|Disc\.|Amount|LT days/.test(String(c.cell.raw))) c.cell.styles.halign = 'right'; } });
     y = doc.lastAutoTable.finalY + 4;
     if (d.type === 'PO') {
-      var goods = d.lines.reduce(function (a, l) { return a + (l.net || 0); }, 0), rows = [['Goods', pdfMoney(goods, d.cur)]];
+      var goods = LN.reduce(function (a, l) { return a + (l.net || 0); }, 0), rows = [['Goods', pdfMoney(goods, d.cur)]];
       (d.charges || []).filter(function (c) { return c.amount; }).forEach(function (c) { rows.push([pdfTxt(L2(['', ''])) + ({ transport: 'Transport', packing: 'Packing', other: 'Other charges' }[c.kind] || c.kind), pdfMoney(c.amount, d.cur)]); });
       rows.push(['TOTAL', pdfMoney(d.total, d.cur)]);
       doc.autoTable({ startY: y, body: rows, margin: { left: W - M - 80, right: M }, theme: 'plain', styles: { fontSize: 9, cellPadding: 1.2 }, columnStyles: { 1: { halign: 'right' } },
@@ -1527,11 +1534,18 @@
     function para(txt, size, bold) { if (!txt) return; doc.setFontSize(size); doc.setFont('helvetica', bold ? 'bold' : 'normal'); var tl = doc.splitTextToSize(pdfTxt(txt), W - 2 * M); if (y + tl.length * 4 > 280) { doc.addPage(); y = 18; } doc.text(tl, M, y); y += tl.length * (size / 2.4) + 3; }
     para(K.closing, 9, true);
     para(K.clauses, 8, false);
+    if (d.type === 'DN' || d.type === 'RQ') {
+      if (y > 250) { doc.addPage(); y = 20; }
+      var labs = d.type === 'DN' ? ['Received on board by (name, rank)', 'Date', 'Ship stamp and signature'] : ['Requested by (Chief Engineer / Chief Officer)', 'Endorsed by (Master)', 'Approved by (office)'];
+      var bw = (W - 2 * M - 8) / 3; doc.setDrawColor(170, 170, 170); doc.setLineWidth(0.3);
+      labs.forEach(function (l, k) { var x = M + k * (bw + 4); doc.rect(x, y, bw, 24); doc.setFontSize(7.5); doc.setTextColor(110, 110, 110); doc.text(pdfTxt(l), x + 2, y + 4); });
+      doc.setTextColor(30, 30, 30); y += 28;
+    }
     var n = doc.getNumberOfPages();
     for (var i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(7); doc.setTextColor(120, 120, 120); doc.text(pdfTxt((T.footer ? T.footer + '  ·  ' : '') + d.num + '  ·  Page ' + i + '/' + n), W / 2, 290, { align: 'center' }); }
     return doc;
   }
-  function pdfName(d) { return (d.type === 'RFQ' ? 'RFQ_' : 'PO_') + d.num.replace(/\//g, '-') + (d.rev ? '_REV' + d.rev : '') + '.pdf'; }
+  function pdfName(d) { return (d.type || 'DOC') + '_' + d.num.replace(/\//g, '-') + (d.rev ? '_REV' + d.rev : '') + '.pdf'; }
   function saveBlob(blob, name) {
     var u = URL.createObjectURL(blob), a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(u); }, 4000);
@@ -1540,9 +1554,9 @@
     loadPdfLib().then(function () {
       var doc = buildPdf(d), blob = doc.output('blob'), u = URL.createObjectURL(blob);
       var bg = document.createElement('div'); bg.className = 'modal-bg';
-      bg.innerHTML = '<div class="modal" style="width:min(1000px,100%);height:92vh" role="dialog" aria-modal="true" aria-label="PDF"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3>' + esc(pdfName(d)) + '</h3><span style="display:flex;gap:8px"><button class="btn" data-dl="1">' + esc(L2(['Scarica PDF', 'Download PDF'])) + '</button><a class="btn" href="#/impostazioni">' + esc(L2(['Modifica modello', 'Edit template'])) + '</a><button class="btn" data-x="1">' + esc(t('close')) + '</button></span></div><iframe title="PDF" src="' + u + '" style="flex:1;width:100%;border:1px solid var(--line);border-radius:8px;background:#fff"></iframe></div>';
+      bg.innerHTML = '<div class="modal" style="width:min(1000px,100%);height:92vh" role="dialog" aria-modal="true" aria-label="PDF"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3>' + esc(pdfName(d)) + '</h3><span style="display:flex;gap:8px"><button class="btn pri" data-print="1">' + esc(L2(['Stampa', 'Print'])) + '</button><button class="btn" data-dl="1">' + esc(L2(['Scarica PDF', 'Download PDF'])) + '</button><a class="btn" href="#/impostazioni">' + esc(L2(['Modifica modello', 'Edit template'])) + '</a><button class="btn" data-x="1">' + esc(t('close')) + '</button></span></div><iframe title="PDF" src="' + u + '" style="flex:1;width:100%;border:1px solid var(--line);border-radius:8px;background:#fff"></iframe></div>';
       document.body.appendChild(bg);
-      bg.addEventListener('click', function (e) { if (e.target === bg || e.target.getAttribute('data-x') || e.target.closest('a')) { bg.remove(); URL.revokeObjectURL(u); } if (e.target.getAttribute('data-dl')) saveBlob(blob, pdfName(d)); });
+      bg.addEventListener('click', function (e) { if (e.target === bg || e.target.getAttribute('data-x') || e.target.closest('a')) { bg.remove(); URL.revokeObjectURL(u); } if (e.target.getAttribute('data-dl')) saveBlob(blob, pdfName(d)); if (e.target.getAttribute('data-print')) { var fr = bg.querySelector('iframe'); try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (x) { window.open(u); } } });
     }).catch(function () { toast(L2(['Libreria PDF non disponibile', 'PDF library not available'])); });
   }
   function b64utf8(s) { return btoa(unescape(encodeURIComponent(s))).replace(/.{76}/g, '$&\r\n'); }
@@ -1619,6 +1633,8 @@
       '<div class="filters">' + lab(L2(['Piè di pagina', 'Footer']), inp('footer', T.footer, '', true)) + '</div></section>' + invoiceSection(T) +
       sec('RFQ', L2(['Richiesta di offerta (RFQ)', 'Request for quotation (RFQ)']), colBox('RFQ', 'impa', L2(['Codice (IMPA o del costruttore)', 'Code (IMPA or maker)'])) + colBox('RFQ', 'note', L2(['Nota / P/N', 'Note / P/N'])) + colBox('RFQ', 'asset', 'Asset') + colBox('RFQ', 'fill', L2(['Colonne vuote per il fornitore', 'Blank columns for the supplier']))) +
       sec('PO', L2(['Ordine (PO)', 'Purchase order (PO)']), colBox('PO', 'impa', L2(['Codice (IMPA o del costruttore)', 'Code (IMPA or maker)'])) + colBox('PO', 'note', L2(['Nota / P/N', 'Note / P/N'])) + colBox('PO', 'asset', 'Asset') + colBox('PO', 'cond', L2(['Condizione', 'Condition']))) +
+      sec('RQ', L2(['Richiesta (stampa)', 'Requisition (print)']), colBox('RQ', 'impa', L2(['Codice', 'Code'])) + colBox('RQ', 'note', L2(['Nota / P/N', 'Note / P/N'])) + colBox('RQ', 'asset', 'Asset')) +
+      sec('DN', L2(['Consegna (DN)', 'Delivery note (DN)']), colBox('DN', 'impa', L2(['Codice', 'Code'])) + colBox('DN', 'note', L2(['Nota / P/N', 'Note / P/N']))) +
       '<div class="note">' + esc(L2(['Le modifiche si salvano subito e valgono per tutti i PDF e le bozze Outlook generate da qui in avanti.', 'Changes are saved immediately and apply to all PDFs and Outlook drafts generated from now on.'])) + '</div>' +
       '<div><button class="btn link" data-act="tplreset">' + esc(L2(['Ripristina modello predefinito', 'Reset to default template'])) + '</button></div>';
     return shell('impostazioni', crumb([[t('fleet'), '#/']]), L2(['Modelli documenti', 'Document templates']), body);
@@ -2555,7 +2571,6 @@
   CLICK.dtab = function (a) { var d = curDoc(); UI.dtab = UI.dtab || {}; UI.dtab[d.id] = a.getAttribute('data-k'); render(); };
   function moreMenu(d) {
     var it = [], secActs = UI.edit && UI.edit.id === d.id ? [] : actionsFor(d).filter(function (a) { return a.sec; });
-    if ((d.type === 'RFQ' || d.type === 'PO') && d.lines && d.lines.length) it.push('<button data-act="pdf">' + esc(L2(['Anteprima PDF', 'PDF preview'])) + '</button>');
     if (feat('link') && d.type === 'RFQ' && d.lines && d.lines.length && { creata: 1, inviata: 1, quotata: 1 }[d.status]) it.push('<button data-act="suplink">' + esc(L2(['Link offerta per il fornitore', 'Supplier quotation link'])) + '</button>');
     if (feat('qr') && d.type === 'DN') it.push('<button data-act="qrprint">' + esc(L2(['Stampa etichetta QR', 'Print QR label'])) + '</button>');
     if (!(UI.edit && UI.edit.id === d.id)) it.push('<button data-act="editstart">' + esc(L2(['Modifica', 'Edit'])) + '</button>');
