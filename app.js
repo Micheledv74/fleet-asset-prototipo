@@ -3231,7 +3231,7 @@
     var files = (c.files || []).map(function (f, i) { return '<button class="btn ghost sm" data-act="certopen" data-id="' + esc(c.id) + '" data-i="' + i + '">' + esc(f.name) + '</button>'; }).join('');
     var hist = (c.hist || []).map(function (h) { return '<div style="font-size:12px"><span class="j">' + fd(h.at) + '</span> · ' + esc(L2(['prima: ', 'before: '])) + fd(h.issue) + ' → ' + fd(h.expiry) + (h.num ? ' · ' + esc(h.num) : '') + '</div>'; }).join('');
     var sups = '<datalist id="certsup">' + (DB.suppliers || []).map(function (s) { return '<option value="' + esc(s.name) + '">'; }).join('') + '</datalist>';
-    return '<tr class="cdet"><td colspan="9"><div style="display:grid;gap:10px 18px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">' +
+    return '<tr class="cdet"><td colspan="6"><div style="display:grid;gap:10px 18px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">' +
       kv(L2(['Rilasciato', 'Issued']), c.issue ? '<span class="j">' + fd(c.issue) + '</span>' : esc(c.txt || '—')) + kv(L2(['Scadenza', 'Expiry']), c.expiry ? '<span class="j">' + fd(c.expiry) + '</span>' : (c.bad ? '<span class="t-warn">' + esc(c.bad) + ' (' + L2(['data non valida', 'invalid date']) + ')</span>' : '—')) +
       kv(L2(['Luogo', 'Place']), esc(c.place)) + kv(L2(['Numero', 'Number']), '<span class="j">' + esc(c.num) + '</span>') + kv(L2(['Validità / note', 'Validity / notes']), esc(c.notes)) +
       kv(L2(['Tipo di azione', 'Action type']), esc(L2(CK[c.kind] || CK.srv))) + '</div>' +
@@ -3244,67 +3244,132 @@
       (hist ? '<div class="stack" style="gap:2px;margin-top:8px"><span class="mute" style="font-size:12px">' + esc(L2(['Storico', 'History'])) + '</span>' + hist + '</div>' : '') +
       '</td></tr>';
   }
+  /* ---- pagina: Flotta (griglia + prossime scadenze) oppure Nave (sezioni per urgenza + carrello) ---- */
+  function certCart(ship) {
+    DB.certCart = DB.certCart || {};
+    var L = (DB.certCart[ship] || []).filter(function (id) { var c = certById(id); return c && !certBusy(c); });
+    DB.certCart[ship] = L; return L;
+  }
+  function certBusy(c) { var d = c.req && byId(c.req); if (!d) return false; var p = pratica(rootOf(d)); return p.state === 'open'; }
+  function openCertRq(ship) {
+    return DB.docs.filter(function (d) { return d.type === 'RQ' && d.ship === ship && d.certs && d.certs.length && (d.status === 'bozza' || d.status === 'endorsed' || d.status === 'verifica') && !kidsOf(d.id).length; })
+      .sort(function (a, b) { return a.id < b.id ? 1 : -1; })[0] || null;
+  }
+  function certSimilar(ship, cart) {
+    if (!cart.length) return [];
+    var base = cart.map(certById).filter(Boolean);
+    return certsOf(ship).filter(function (c) {
+      if (cart.indexOf(c.id) >= 0 || certBusy(c) || c.grp === 'man') return false;
+      var x = certNext(c); if (!x.n || x.days > 120) return false;
+      return base.some(function (b) { var y = certNext(b); return y.n && b.who === c.who && Math.abs(daysBetween(y.n.due, x.n.due)) <= 31; });
+    });
+  }
+  function certPanel(ship) {
+    var cart = certCart(ship), last = UI.certLast && byId(UI.certLast);
+    var done = last && last.ship === ship ? '<div class="note" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:var(--ink)"><span>' + esc(L2(['Richiesta pronta: ', 'Requisition ready: '])) + '<b class="j">' + esc(last.num) + '</b> · ' + (last.lines || []).length + ' ' + esc(L2(['voci', 'items'])) + '</span><a class="btn sm" href="#/doc/' + last.id + '">' + esc(L2(['Apri la richiesta', 'Open requisition'])) + ' →</a><button class="btn ghost sm" data-act="certlastx">✕</button></div>' : '';
+    if (!cart.length) return '<div class="cpanel stack" style="gap:8px">' + done + '<div class="mute" style="font-size:13px">' + esc(L2(['Premi ＋ sulle voci da organizzare: finiscono qui e diventano una sola richiesta.', 'Press ＋ on the items to arrange: they collect here and become one requisition.'])) + '</div></div>';
+    var sim = certSimilar(ship, cart), ex = openCertRq(ship);
+    return '<div class="cpanel stack" style="gap:8px">' + done +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><b>' + esc(L2(['Richiesta in preparazione', 'Requisition being prepared'])) + ' · ' + ship + ' · ' + cart.length + ' ' + esc(L2(['voci', 'items'])) + '</b><button class="btn ghost sm" data-act="certcartclr">' + esc(L2(['Svuota', 'Clear'])) + '</button></div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">' + cart.map(function (id) { var c = certById(id); return '<span class="chip c-acc" style="gap:6px">' + esc((c.no ? c.no + ' · ' : '') + c.name.slice(0, 42)) + '<button class="btn ghost sm" style="padding:0 4px;min-height:0" data-act="certcart" data-id="' + esc(id) + '" aria-label="remove">✕</button></span>'; }).join('') + '</div>' +
+      (sim.length ? '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px"><span class="mute">' + esc(L2(['Stesso "Chi" e scadenza vicina: ', 'Same "Who" and close due date: '])) + sim.length + ' ' + esc(L2(['altre voci', 'more items'])) + '</span><button class="btn sm" data-act="certcartsim">' + esc(L2(['＋ Aggiungile', '＋ Add them'])) + '</button></div>' : '') +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">' + (ex ? '<button class="btn" data-act="certcartgo" data-to="' + ex.id + '">' + esc(L2(['Aggiungi a ', 'Add to ']) + ex.num) + '</button>' : '') + '<button class="btn pri" data-act="certcartgo">' + esc(L2(['Crea la richiesta', 'Create requisition'])) + '</button></div></div>';
+  }
+  function certRowShip(c, x, cart) {
+    var open = UI.certOpen === c.id, inCart = cart.indexOf(c.id) >= 0, busy = certBusy(c);
+    var act = busy ? certReq(c) : '<button class="btn sm ' + (inCart ? 'pri' : '') + '" data-act="certcart" data-id="' + esc(c.id) + '" title="' + esc(L2(['Aggiungi alla richiesta in preparazione', 'Add to the requisition being prepared'])) + '">' + (inCart ? '✓ ' + esc(L2(['Aggiunta', 'Added'])) : '＋ ' + esc(L2(['Aggiungi', 'Add']))) + '</button>';
+    return '<tr class="r crow' + (open ? ' on' : '') + (inCart ? ' incart' : '') + '" data-act="certopenrow" data-id="' + esc(c.id) + '">' +
+      '<td class="j mute" style="white-space:nowrap">' + esc(c.no || '') + '</td>' +
+      '<td style="min-width:220px"><div style="font-weight:600;font-size:13px">' + esc(c.name) + '</div><div class="mute" style="font-size:11px">' + esc(cgName(c.grp)) + ' · ' + esc(L2(CK[c.kind] || CK.srv)) + (c.sup ? ' · ' + esc(c.sup) : '') + ((c.files || []).length ? ' · PDF ' + c.files.length : '') + (x.nd ? ' · <span class="t-warn">' + esc(L2(['dati da completare', 'data to complete'])) + '</span>' : '') + '</div></td>' +
+      '<td>' + certDueHtml(c, x) + '</td><td>' + certDays(x) + '</td>' +
+      '<td data-stop="1">' + whoSel(c) + '</td>' +
+      '<td style="text-align:right;white-space:nowrap">' + act + '</td></tr>' + (open ? certDetail(c, x) : '');
+  }
   function pageCerts(q) {
-    var nave = q.nave || '', grp = q.gruppo || '', stf = q.stato || 'att', qq = (q.q || '').toUpperCase();
-    UI.certSel = UI.certSel || {};
-    var all = certsOf(nave).filter(function (c) { return grp ? c.grp === grp : c.grp !== 'man'; });
-    var list = all.map(function (c) { return { c: c, x: certNext(c) }; }).filter(function (o) {
-      var s = o.x.st;
-      if (qq && [o.c.no, o.c.name, o.c.place, o.c.num, o.c.who, o.c.sup, o.c.notes].join(' ').toUpperCase().indexOf(qq) < 0) return false;
-      if (stf === 'att') return s === 'bad' || s === 'w30' || s === 'w90';
-      if (stf === 'nd') return s === 'info' || s === 'empty' || o.x.nd;
-      if (stf === 'tutti') return true;
-      return s === stf;
-    }).sort(function (a, b) { var da = a.x.n ? a.x.n.due : '9', db = b.x.n ? b.x.n.due : '9'; return da < db ? -1 : da > db ? 1 : (a.c.ship < b.c.ship ? -1 : 1); });
-    var cnt = certCount(all);
-    var stTabs = [['att', L2(['Da gestire', 'To handle']), cnt.att], ['bad', L2(['Scaduti', 'Expired']), cnt.bad], ['w30', L2(['Entro 30 gg', 'Within 30 d']), cnt.w30], ['w90', L2(['Entro 90 gg', 'Within 90 d']), cnt.w90], ['ok', L2(['In regola', 'Valid']), cnt.ok], ['nd', L2(['Da completare', 'To complete']), cnt.info + cnt.empty + cnt.nd], ['tutti', L2(['Tutti', 'All']), cnt.tot]];
-    var shipPills = '<div style="display:flex;gap:6px;flex-wrap:wrap"><a class="chip ' + (!nave ? 'c-acc' : 'c-neutral') + '" style="text-decoration:none" href="#/certificati' + qs({ gruppo: grp, stato: q.stato }) + '">' + esc(L2(['Tutta la flotta', 'Whole fleet'])) + '</a>' +
-      DB.ships.map(function (s) { var n = certCount(certsOf(s.code).filter(function (c) { return c.grp !== 'man'; })).att; return '<a class="chip ' + (nave === s.code ? 'c-acc' : 'c-neutral') + '" style="text-decoration:none" href="#/certificati' + qs({ nave: s.code, gruppo: grp, stato: q.stato }) + '">' + s.code + (certsOf(s.code).length ? ' · ' + n : '') + '</a>'; }).join('') + '</div>';
-    var sel = Object.keys(UI.certSel).filter(function (k) { return UI.certSel[k] && certById(k); });
-    var bar = sel.length ? '<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-color:var(--accLine)"><b>' + sel.length + ' ' + esc(L2(['voci selezionate', 'items selected'])) + '</b><span class="mute" style="font-size:12px">' + esc(L2(['una sola richiesta per tutte (stessa nave)', 'one requisition for all (same vessel)'])) + '</span><span style="flex:1"></span><button class="btn ghost sm" data-act="certclr">' + esc(L2(['Deseleziona', 'Clear'])) + '</button><button class="btn pri sm" data-act="certrq">' + esc(L2(['Crea richiesta', 'Create requisition'])) + '</button></div>' : '';
-    var showShip = !nave;
-    var rows = list.slice(0, 400).map(function (o) {
-      var c = o.c, x = o.x, open = UI.certOpen === c.id;
-      return '<tr class="r crow' + (open ? ' on' : '') + '" data-act="certopenrow" data-id="' + esc(c.id) + '">' +
-        '<td><input type="checkbox" data-act="certsel" data-id="' + esc(c.id) + '"' + (UI.certSel[c.id] ? ' checked' : '') + ' aria-label="sel"></td>' +
-        (showShip ? '<td class="j">' + c.ship + '</td>' : '') + '<td class="j mute" style="white-space:nowrap">' + esc(c.no || '') + '</td>' +
-        '<td style="min-width:220px"><div style="font-weight:600;font-size:13px">' + esc(c.name) + '</div><div class="mute" style="font-size:11px">' + esc(cgName(c.grp)) + ' · ' + esc(L2(CK[c.kind] || CK.srv)) + (c.sup ? ' · ' + esc(c.sup) : '') + ((c.files || []).length ? ' · PDF ' + c.files.length : '') + (x.nd ? ' · <span class="t-warn">' + esc(L2(['dati da completare', 'data to complete'])) + '</span>' : '') + '</div></td>' +
-        '<td>' + certDueHtml(c, x) + '</td><td>' + certDays(x) + '</td>' +
-        '<td data-stop="1">' + whoSel(c) + '</td><td>' + certReq(c) + '</td>' +
-        '<td style="text-align:right;white-space:nowrap">' + (c.req && byId(c.req) ? '' : (x.st === 'bad' || x.st === 'w30' || x.st === 'w90' ? '<button class="btn pri sm" data-act="certorg" data-id="' + esc(c.id) + '">' + esc(L2(['Organizza', 'Arrange'])) + '</button>' : '<button class="btn ghost sm" data-act="certorg" data-id="' + esc(c.id) + '">' + esc(L2(['Organizza', 'Arrange'])) + '</button>')) + '</td></tr>' +
-        (open ? certDetail(c, x) : '');
+    var nave = q.nave && shipBy(q.nave) ? q.nave : '', grp = q.gruppo || '', qq = (q.q || '').toUpperCase();
+    if (q.apri && UI.certOpenQ !== q.apri) { UI.certOpen = q.apri; UI.certOpenQ = q.apri; }
+    var shipTabs = '<nav class="tabs ctabs">' + [['', L2(['Flotta', 'Fleet']), null]].concat(DB.ships.map(function (s) { return [s.code, s.name, certsOf(s.code).length ? certCount(certsOf(s.code).filter(function (c) { return c.grp !== 'man'; })).att : null]; })).map(function (s) {
+      return '<a class="' + (nave === s[0] ? 'on' : '') + '" href="#/certificati' + qs({ nave: s[0] }) + '">' + esc(s[1]) + (s[2] != null ? '<span class="j">' + s[2] + '</span>' : '') + '</a>';
+    }).join('') + '</nav>';
+    var title = L2(['Certificati', 'Certificates']) + (nave ? ' · ' + shipBy(nave).name : '');
+    if (!nave) {
+      var up = (DB.certs || []).filter(function (c) { return c.grp !== 'man'; }).map(function (c) { return { c: c, x: certNext(c) }; }).filter(function (o) { return o.x.st === 'bad' || o.x.st === 'w30'; })
+        .sort(function (a, b) { return a.x.n.due < b.x.n.due ? -1 : 1; });
+      var rows = up.slice(0, 10).map(function (o) {
+        return '<tr class="r" data-href="#/certificati' + qs({ nave: o.c.ship, apri: o.c.id }) + '"><td class="j">' + o.c.ship + '</td><td><b style="font-size:13px">' + esc(o.c.name) + '</b><div class="mute" style="font-size:11px">' + esc(cgName(o.c.grp)) + '</div></td><td>' + certDueHtml(o.c, o.x) + '</td><td>' + certDays(o.x) + '</td><td>' + esc(o.c.who || '') + '</td><td>' + (certBusy(o.c) ? certReq(o.c) : '') + '</td></tr>';
+      }).join('');
+      return shell('certificati', crumb([[t('fleet'), '#/']]), title, shipTabs +
+        '<section class="card stack" style="gap:8px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><h2>' + esc(L2(['Situazione di flotta', 'Fleet overview'])) + '</h2><span class="mute" style="font-size:12px">' + esc(L2(['numero = voci scadute o entro 90 giorni · clic per aprire la nave', 'number = items expired or due within 90 days · click to open the vessel'])) + '</span></div>' + certGrid() + '</section>' +
+        '<section class="card stack" style="gap:8px;margin-top:14px"><h2>' + esc(L2(['Scaduti ed entro 30 giorni', 'Expired and within 30 days'])) + ' <span class="j mute">' + up.length + '</span></h2>' +
+        (up.length ? '<div class="tablebox"><table class="grid"><thead><tr><th>' + esc(t('c_ship')) + '</th><th>' + esc(L2(['Certificato / voce', 'Certificate / item'])) + '</th><th>' + esc(L2(['Prossima scadenza', 'Next due'])) + '</th><th>' + esc(L2(['Giorni', 'Days'])) + '</th><th>' + esc(L2(['Chi', 'Who'])) + '</th><th>' + esc(L2(['Pratica', 'Case'])) + '</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<div class="mute">' + esc(L2(['Niente.', 'Nothing.'])) + '</div>') +
+        (up.length > 10 ? '<div class="mute" style="font-size:12px">' + esc(L2(['Le prime 10. Le altre nella scheda di ogni nave.', 'First 10. The others on each vessel tab.'])) + '</div>' : '') + '</section>');
+    }
+    var mine = certsOf(nave);
+    if (!mine.length) return shell('certificati', crumb([[t('fleet'), '#/'], [L2(['Certificati', 'Certificates']), '#/certificati']]), title, shipTabs + '<div class="card"><div class="empty">' + esc(L2(['Nessuna lista certificati per questa nave. Caricala da Impostazioni › Dati (file DOC F01).', 'No certificate list for this vessel. Load it from Settings › Data (DOC F01 file).'])) + '</div></div>');
+    var base = mine.filter(function (c) { return grp ? c.grp === grp : c.grp !== 'man'; }).filter(function (c) { return !qq || [c.no, c.name, c.place, c.num, c.who, c.sup, c.notes].join(' ').toUpperCase().indexOf(qq) >= 0; })
+      .map(function (c) { return { c: c, x: certNext(c) }; });
+    var grpChips = '<div class="cgchips"><a class="chip ' + (!grp ? 'c-acc' : 'c-neutral') + '" href="#/certificati' + qs({ nave: nave, q: q.q }) + '">' + esc(L2(['Tutti i gruppi', 'All groups'])) + '</a>' + CG.map(function (g) {
+      var L = mine.filter(function (c) { return c.grp === g[0]; }); if (!L.length) return '';
+      var o = certCount(L), dot = o.bad ? 'var(--red)' : o.w30 ? 'var(--amber)' : o.w90 ? 'var(--teal)' : 'var(--green)';
+      return '<a class="chip ' + (grp === g[0] ? 'c-acc' : 'c-neutral') + '" href="#/certificati' + qs({ nave: nave, gruppo: g[0], q: q.q }) + '"><i style="width:8px;height:8px;border-radius:50%;background:' + (g[0] === 'man' ? 'var(--line)' : dot) + ';display:inline-block"></i>' + esc(L2(g[1])) + (o.att ? ' <b class="j">' + o.att + '</b>' : '') + '</a>';
+    }).join('') + '</div>';
+    var SEC = [['bad', L2(['Scaduti', 'Expired']), 't-bad'], ['w30', L2(['Entro 30 giorni', 'Within 30 days']), 't-warn'], ['w90', L2(['Entro 90 giorni', 'Within 90 days']), ''], ['ok', L2(['In regola', 'Valid']), '', 'ok'], ['rest', L2(['Senza scadenza o da completare', 'No expiry or to complete']), '', 'rest']];
+    UI.certShow = UI.certShow || {};
+    var cart = certCart(nave);
+    var body = SEC.map(function (s) {
+      var L = base.filter(function (o) { return s[0] === 'rest' ? (o.x.st === 'perm' || o.x.st === 'info' || o.x.st === 'empty') : o.x.st === s[0]; })
+        .sort(function (a, b) { var da = a.x.n ? a.x.n.due : '9', db = b.x.n ? b.x.n.due : '9'; return da < db ? -1 : da > db ? 1 : 0; });
+      if (!L.length) return '';
+      var fold = s[3] && !UI.certShow[s[0]] && !qq;
+      var head = '<tr class="csec"><td colspan="6"><span class="' + s[2] + '" style="font-weight:700">' + esc(s[1]) + '</span> <span class="j mute">' + L.length + '</span>' + (s[3] ? ' <button class="btn ghost sm" data-act="certshow" data-k="' + s[0] + '">' + esc(fold ? L2(['Mostra', 'Show']) : L2(['Nascondi', 'Hide'])) + '</button>' : '') + '</td></tr>';
+      return head + (fold ? '' : L.map(function (o) { return certRowShip(o.c, o.x, cart); }).join(''));
     }).join('');
-    var table = list.length ? '<div class="tablebox"><table class="grid ctable"><thead><tr><th></th>' + (showShip ? '<th>' + esc(t('c_ship')) + '</th>' : '') + '<th>N°</th><th>' + esc(L2(['Certificato / voce', 'Certificate / item'])) + '</th><th>' + esc(L2(['Prossima scadenza', 'Next due'])) + '</th><th>' + esc(L2(['Giorni', 'Days'])) + '</th><th>' + esc(L2(['Chi', 'Who'])) + '</th><th>' + esc(L2(['Pratica', 'Case'])) + '</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' + (list.length > 400 ? '<div class="mute" style="font-size:12px">' + esc(L2(['Mostrate le prime 400 voci: usa i filtri.', 'First 400 items shown: use the filters.'])) + '</div>' : '')
-      : '<div class="empty">' + esc(certsOf(nave).length ? L2(['Nessuna voce con questi filtri.', 'No items match these filters.']) : L2(['Nessuna lista certificati per questa nave. Caricala da Impostazioni › Dati (file DOC F01).', 'No certificate list for this vessel. Load it from Settings › Data (DOC F01 file).'])) + '</div>';
-    var body = '<div class="stack" style="gap:14px">' +
-      '<section class="card stack" style="gap:8px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><h2>' + esc(L2(['Situazione di flotta', 'Fleet overview'])) + '</h2><span class="mute" style="font-size:12px">' + esc(L2(['numero = voci scadute o in scadenza entro 90 giorni · clic per aprire', 'number = items expired or due within 90 days · click to open'])) + '</span></div>' + certGrid() + '</section>' +
-      '<div class="filters">' + shipPills + '<select data-filter="gruppo" aria-label="' + esc(L2(['Gruppo', 'Group'])) + '"><option value="">' + esc(L2(['Tutti i gruppi', 'All groups'])) + '</option>' + CG.map(function (g) { return '<option value="' + g[0] + '"' + (grp === g[0] ? ' selected' : '') + '>' + esc(L2(g[1])) + '</option>'; }).join('') + '</select>' +
-      '<input type="search" data-filter="q" value="' + esc(q.q || '') + '" placeholder="' + esc(L2(['Cerca certificato, numero, ditta', 'Search certificate, number, company'])) + '" style="flex:1;min-width:160px"></div>' +
-      '<nav class="tabs" style="flex-wrap:wrap">' + stTabs.map(function (s) { return '<a class="' + (stf === s[0] ? 'on' : '') + '" href="#/certificati' + qs({ nave: nave, gruppo: grp, stato: s[0] === 'att' ? '' : s[0], q: q.q }) + '">' + esc(s[1]) + '<span class="j">' + s[2] + '</span></a>'; }).join('') + '</nav>' +
-      bar + table + '</div>';
-    return shell('certificati', crumb([[t('fleet'), '#/']]), L2(['Certificati', 'Certificates']) + (nave ? ' · ' + shipBy(nave).name : ''), body);
+    var m = (DB.certMeta || {})[nave];
+    var page = shipTabs +
+      '<div class="filters" style="align-items:center">' + grpChips + '<input type="search" data-filter="q" value="' + esc(q.q || '') + '" placeholder="' + esc(L2(['Cerca certificato, numero, ditta', 'Search certificate, number, company'])) + '" style="flex:1;min-width:160px"></div>' +
+      (m ? '<div class="mute" style="font-size:12px;margin:-4px 0 8px">' + esc(L2(['Lista aggiornata al ', 'List updated on ']) + fd(m.ref)) + (m.ref && m.ref < addMonths(TODAY, -3) ? ' · <span class="t-warn">' + esc(L2(['più di 3 mesi fa: chiedi alla nave la versione nuova', 'over 3 months ago: ask the vessel for the new version'])) + '</span>' : '') + '</div>' : '') +
+      '<div class="cwrap"><div class="tablebox"><table class="grid ctable"><thead><tr><th>N°</th><th>' + esc(L2(['Certificato / voce', 'Certificate / item'])) + '</th><th>' + esc(L2(['Prossima scadenza', 'Next due'])) + '</th><th>' + esc(L2(['Giorni', 'Days'])) + '</th><th>' + esc(L2(['Chi', 'Who'])) + '</th><th></th></tr></thead><tbody>' + (body || '<tr><td colspan="6" class="mute">' + esc(t('noResults')) + '</td></tr>') + '</tbody></table></div>' +
+      certPanel(nave) + '</div>';
+    return shell('certificati', crumb([[t('fleet'), '#/'], [L2(['Certificati', 'Certificates']), '#/certificati']]), title, page);
   }
   function certLineDesc(c) {
     var x = certNext(c), due = x.n ? ' · ' + L2(['scad. ', 'due ']) + fd(x.n.due) : '';
     var pre = c.kind === 'svy' ? L2(['Visita ', 'Survey ']) + (x.n && x.n.what === 'svy' && x.n.s ? '(' + x.n.s.name + ') ' : L2(['rinnovo ', 'renewal '])) : c.kind === 'srv' ? L2(['Servizio: ', 'Service: ']) : c.kind === 'adm' ? L2(['Rinnovo: ', 'Renewal: ']) : '';
     return (pre + c.name + due).slice(0, 200);
   }
-  function certMakeRq(ids) {
-    var L = ids.map(certById).filter(Boolean); if (!L.length) return;
-    var ship = L[0].ship;
-    if (L.some(function (c) { return c.ship !== ship; })) { toast(L2(['Seleziona voci della stessa nave', 'Select items of the same vessel'])); return; }
-    var dues = L.map(function (c) { var x = certNext(c); return x.n ? x.n.due : null; }).filter(Boolean).sort();
-    var lines = L.map(function (c, i) { return { row: (i + 1) * 10, item: null, code: '', impa: '', desc: certLineDesc(c), note: [c.who, c.sup].filter(Boolean).join(' · '), uom: 'PCE', qty: 1 }; });
-    var desc = L.length === 1 ? L2(['Certificati · ', 'Certificates · ']) + L[0].name : L2(['Certificati · ', 'Certificates · ']) + L.length + ' ' + L2(['voci', 'items']) + ' (' + L.map(function (c) { return cgName(c.grp); }).filter(function (v, i, a) { return a.indexOf(v) === i; }).join(', ') + ')';
-    var due = dues[0] ? (dues[0] < TODAY ? addDays(TODAY, 7) : addDays(dues[0], -7) < TODAY ? TODAY : addDays(dues[0], -7)) : null;
-    var d = newDoc('RQ', ship, { desc: desc.slice(0, 120), status: P.seat === 'ship' ? 'bozza' : 'endorsed', side: P.seat === 'ship' ? 'ship' : 'office', dept: 'DECK', due: due, lines: lines, certs: L.map(function (c) { return c.id; }) }, L2(['Creata dai certificati', 'Created from certificates']));
-    L.forEach(function (c) { c.req = d.id; delete UI.certSel[c.id]; });
-    save(); location.hash = '#/doc/' + d.id; toast(L2(['Richiesta creata: ', 'Requisition created: ']) + d.num);
+  function certLines(L, start) { return L.map(function (c, i) { return { row: start + (i + 1) * 10, item: null, code: '', impa: '', desc: certLineDesc(c), note: [c.who, c.sup].filter(Boolean).join(' · '), uom: 'PCE', qty: 1 }; }); }
+  function certMakeRq(ids, toId) {
+    var L = ids.map(certById).filter(Boolean); if (!L.length) return null;
+    var ship = L[0].ship, d;
+    if (toId && (d = byId(toId))) {
+      var mx = (d.lines || []).reduce(function (a, l) { return Math.max(a, l.row || 0); }, 0);
+      d.lines = (d.lines || []).concat(certLines(L, mx)); d.certs = (d.certs || []).concat(L.map(function (c) { return c.id; }));
+      d.log = d.log || []; d.log.push({ at: TODAY, to: d.status, txt: L2(['Aggiunte dai certificati: ', 'Added from certificates: ']) + L.length + ' ' + L2(['voci', 'items']) });
+    } else {
+      var dues = L.map(function (c) { var x = certNext(c); return x.n ? x.n.due : null; }).filter(Boolean).sort();
+      var desc = L2(['Certificati · ', 'Certificates · ']) + (L.length === 1 ? L[0].name : L.length + ' ' + L2(['voci', 'items']) + ' (' + L.map(function (c) { return cgName(c.grp); }).filter(function (v, i, a) { return a.indexOf(v) === i; }).join(', ') + ')');
+      var due = dues[0] ? (addDays(dues[0], -7) < TODAY ? addDays(TODAY, 7) : addDays(dues[0], -7)) : null;
+      d = newDoc('RQ', ship, { desc: desc.slice(0, 120), status: P.seat === 'ship' ? 'bozza' : 'endorsed', side: P.seat === 'ship' ? 'ship' : 'office', dept: 'DECK', due: due, lines: certLines(L, 0), certs: L.map(function (c) { return c.id; }) }, L2(['Creata dai certificati', 'Created from certificates']));
+    }
+    L.forEach(function (c) { c.req = d.id; });
+    return d;
   }
-  CLICK.certorg = function (a) { certMakeRq([a.getAttribute('data-id')]); };
-  CLICK.certrq = function () { certMakeRq(Object.keys(UI.certSel || {}).filter(function (k) { return UI.certSel[k]; })); };
-  CLICK.certclr = function () { UI.certSel = {}; render(); };
-  CLICK.certsel = function (a) { UI.certSel = UI.certSel || {}; UI.certSel[a.getAttribute('data-id')] = a.checked; render(); };
+  CLICK.certcart = function (a) {
+    var c = certById(a.getAttribute('data-id')); if (!c) return;
+    var L = certCart(c.ship), i = L.indexOf(c.id);
+    if (i >= 0) L.splice(i, 1); else L.push(c.id);
+    save(); render();
+  };
+  CLICK.certcartsim = function () { var nave = route().q.nave, L = certCart(nave); certSimilar(nave, L).forEach(function (c) { L.push(c.id); }); save(); render(); };
+  CLICK.certcartclr = function () { DB.certCart[route().q.nave] = []; save(); render(); };
+  CLICK.certcartgo = function (a) {
+    var nave = route().q.nave, L = certCart(nave); if (!L.length) return;
+    var d = certMakeRq(L.slice(), a.getAttribute('data-to')); if (!d) return;
+    DB.certCart[nave] = []; UI.certLast = d.id; save(); render();
+    toast(L2(['Richiesta ', 'Requisition ']) + d.num + ' · ' + (d.lines || []).length + ' ' + L2(['voci', 'items']));
+  };
+  CLICK.certlastx = function () { UI.certLast = null; render(); };
+  CLICK.certshow = function (a) { UI.certShow = UI.certShow || {}; var k = a.getAttribute('data-k'); UI.certShow[k] = !UI.certShow[k]; render(); };
   CLICK.certopenrow = function (a) { var id = a.getAttribute('data-id'); UI.certOpen = UI.certOpen === id ? null : id; render(); };
   CLICK.certopen = function (a) { var c = certById(a.getAttribute('data-id')), f = c && (c.files || [])[+a.getAttribute('data-i')]; if (f) openFile(f.file, f.name); };
   CLICK.certupd = function (a) {
