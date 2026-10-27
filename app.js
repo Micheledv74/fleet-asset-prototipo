@@ -3220,6 +3220,10 @@
     if (DB.settings.invoiceTo) { DB.settings.invoiceTo.email = SI.invoiceTo.email; if (!DB.settings.invoiceTo.vat) DB.settings.invoiceTo.vat = SI.invoiceTo.vat; }
     DB.settings.invMig = 2; save();
   }
+  if (DB.settings && DB.settings.invoiceToShip && DB.settings.invMig !== 3 && window.SEED.settings && window.SEED.settings.invoiceToShip) {
+    ['MLG', 'MDT'].forEach(function (k) { var d = DB.settings.invoiceToShip[k], sv = window.SEED.settings.invoiceToShip[k]; if (d && sv && !d.vat) d.vat = sv.vat; });
+    DB.settings.invMig = 3; save();
+  }
   if (!DB.warehouses && window.SEED.warehouses) { DB.warehouses = clone(window.SEED.warehouses); save(); }
   DB.settings = DB.settings || {};
   if (!DB.settings.approval) DB.settings.approval = { auto: 2500, mgr: 'Direttore tecnico', mgrMax: 25000, top: 'Armatore' };
