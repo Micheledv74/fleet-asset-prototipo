@@ -2518,6 +2518,7 @@
       ['#/', 'fleet', t('fleet'), active === 'home' || active === 'ship'],
       ['#/docs' + qs({ tipo: 'PR', nave: ship }), 'cart', t('purchasing'), k === 'acq'],
       ['#/logistica' + qs({ nave: ship }), 'box', L2(['Logistica', 'Logistics']), k === 'log' || active === 'logistica'],
+      ['#/ricambi' + qs({ nave: ship && machines(ship).length ? ship : '' }), 'gear', L2(['Ricambi', 'Spares']), active === 'ricambi'],
       ['#/certificati' + qs({ nave: ship }), 'cal', L2(['Certificati', 'Certificates']), active === 'certificati'],
       ['#/' + (P.seat === 'acc' ? 'contabilita' : 'budget' + qs({ nave: ship || 'PEP' })), 'chart', t('budget'), k === 'bud']
     ];
@@ -3449,6 +3450,199 @@
       (P.ref && P.ref < addMonths(TODAY, -6) ? '<span class="t-warn" style="font-size:12px">' + esc(L2(['File vecchio di oltre 6 mesi: controlla che sia l\'ultima versione.', 'File older than 6 months: check it is the latest version.'])) + '</span>' : '') + '</div>';
   }
 
+
+  /* =====================================================================
+     RICAMBI DA DISEGNO: macchinario → disegno cliccabile → richiesta
+     ===================================================================== */
+  function machines(ship) { return ((window.SEED && window.SEED.machines) || []).filter(function (m) { return !ship || m.ship === ship; }); }
+  function machineById(id) { var a = machines(); for (var i = 0; i < a.length; i++) if (a[i].id === id) return a[i]; return null; }
+  function dwgById(m, id) { for (var i = 0; i < (m ? m.dwgs.length : 0); i++) if (m.dwgs[i].id === id) return m.dwgs[i]; return null; }
+  function partBySym(dw, sym) { for (var i = 0; i < (dw ? dw.parts.length : 0); i++) if (dw.parts[i].sym === sym) return dw.parts[i]; return null; }
+  function yardOf(ship) { return ((window.SEED && window.SEED.shipYard) || {})[ship] || null; }
+  function partCart(ship) { DB.partCart = DB.partCart || {}; return (DB.partCart[ship] = DB.partCart[ship] || []); }
+  function partKits(ship) {
+    if (!DB.partKits) DB.partKits = JSON.parse(JSON.stringify((window.SEED && window.SEED.partKits) || []));
+    return DB.partKits.filter(function (k) { return !ship || k.ship === ship; });
+  }
+  function normPn(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+  function partUses(pn) {
+    var n = normPn(pn), out = []; if (!n) return out;
+    machines().forEach(function (m) { m.dwgs.forEach(function (d) { d.parts.forEach(function (p) { if (normPn(p.pn) === n) out.push({ m: m, d: d, p: p }); }); }); });
+    return out;
+  }
+  function partHistory(ship, pn) {
+    var n = normPn(pn), last = null, open = [];
+    if (!n || n.length < 5) return { last: null, open: [] };
+    DB.docs.forEach(function (d) {
+      if (d.ship !== ship || !d.lines) return;
+      var hit = d.lines.filter(function (l) { return normPn(l.code) === n || normPn(l.impa) === n || (n.length >= 7 && normPn(l.desc).indexOf(n) >= 0); })[0];
+      if (!hit) return;
+      if (d.type === 'PO' && d.status !== 'annullato' && (!last || d.date > last.d.date)) last = { d: d, l: hit };
+      if ((d.type === 'RQ' || d.type === 'RFQ' || d.type === 'PO') && isOpen(d)) open.push(d);
+    });
+    return { last: last, open: open };
+  }
+  function partStock(ship, pn) {
+    var n = normPn(pn); if (!n) return null;
+    var it = (DB.items || []).filter(function (x) { return normPn(x.code) === n || normPn(x.impa) === n; })[0];
+    if (!it) return null;
+    var s = stockOf(ship)[it.id], pl = placementsOf(ship).filter(function (p) { return p.item === it.id; });
+    return { it: it, qty: s ? s.qty : 0, where: pl.map(function (p) { return p.loc; }).filter(Boolean) };
+  }
+  function keepView(fn) {
+    var v = document.querySelector('.pviewer'), sx = v ? v.scrollLeft : 0, sy = v ? v.scrollTop : 0, wy = window.scrollY;
+    fn();
+    var v2 = document.querySelector('.pviewer'); if (v2) { v2.scrollLeft = sx; v2.scrollTop = sy; }
+    window.scrollTo(0, wy);
+  }
+  function partCard(ship, m, dw, p) {
+    if (!p) return '<div class="pcard mute" style="font-size:13px">' + esc(L2(['Clicca un numero sul disegno o una riga della distinta.', 'Click a number on the drawing or a row of the parts list.'])) + '</div>';
+    var h = partHistory(ship, p.pn), st = partStock(ship, p.pn), uses = partUses(p.pn).filter(function (u) { return !(u.d.id === dw.id && u.p.sym === p.sym); });
+    var inCart = partCart(ship).filter(function (c) { return c.d === dw.id && c.sym === p.sym; })[0];
+    var row = function (l, v) { return '<div class="pkv"><span>' + esc(l) + '</span><b>' + v + '</b></div>'; };
+    return '<div class="pcard stack" style="gap:8px">' +
+      '<div><span class="chip c-acc j">' + esc(L2(['pos. ', 'pos. ']) + p.sym) + '</span></div>' +
+      '<div style="font-size:16px;font-weight:700;line-height:1.25">' + esc(p.name) + '</div>' +
+      row(L2(['Codice maker', 'Maker code']), p.pn ? '<span class="j">' + esc(p.pn) + '</span>' : '<span class="t-warn">' + esc(L2(['non indicato: chiedere al maker con disegno e posizione', 'not given: ask the maker with drawing and position'])) + '</span>') +
+      (p.mat ? row(L2(['Materiale', 'Material']), esc(p.mat)) : '') +
+      row(L2(['Quantità montata', 'Fitted quantity']), esc(p.qty) + (dw.per === 'CYL' ? ' ' + esc(L2(['per cilindro', 'per cylinder'])) : '')) +
+      row(L2(['Disegno', 'Drawing']), '<span class="j">' + esc(dw.no) + '</span> · ' + esc(L2(dw.title))) +
+      row(L2(['A bordo', 'On board']), st ? '<span class="j">' + nf(st.qty) + '</span>' + (st.where.length ? ' · ' + esc(st.where.join(', ')) : '') : '<span class="mute">' + esc(L2(['non a magazzino nel prototipo', 'not in stores in the prototype'])) + '</span>') +
+      row(L2(['Ultimo ordine', 'Last order']), h.last ? '<a href="#/doc/' + h.last.d.id + '" class="j">' + esc(h.last.d.num) + '</a> · ' + fd(h.last.d.date) + ' · ' + esc(supName(h.last.d.sup)) + (h.last.l.price ? ' · ' + esc(money(h.last.l.price, h.last.d.cur)) : '') : '<span class="mute">' + esc(L2(['nessuno trovato', 'none found'])) + '</span>') +
+      (h.open.length ? '<div class="note" style="color:var(--ink)">' + esc(L2(['Già in corso: ', 'Already in progress: '])) + h.open.map(function (d) { return '<a href="#/doc/' + d.id + '" class="j">' + esc(d.num) + '</a>'; }).join(', ') + '</div>' : '') +
+      (uses.length ? '<div style="font-size:12px"><span class="mute">' + esc(L2(['Stesso codice anche in: ', 'Same code also in: '])) + '</span>' + uses.map(function (u) { return '<a href="#/ricambi' + qs({ nave: ship, m: u.m.id, d: u.d.id, p: u.p.sym }) + '">' + esc(L2(u.m.name) + ' · ' + u.d.no + ' pos. ' + u.p.sym) + '</a>'; }).join('; ') + '</div>' : '') +
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px"><label style="display:flex;align-items:center;gap:6px;font-size:13px">' + esc(L2(['Q.tà', 'Qty'])) + '<input type="number" min="1" step="1" value="' + esc(inCart ? inCart.qty : (parseInt(p.qty, 10) || 1)) + '" data-partqty="1" style="width:76px"></label>' +
+      '<button class="btn ' + (inCart ? '' : 'pri') + '" data-act="partadd" data-d="' + esc(dw.id) + '" data-sym="' + esc(p.sym) + '">' + (inCart ? '✓ ' + esc(L2(['Aggiorna quantità', 'Update quantity'])) : '＋ ' + esc(L2(['Aggiungi alla richiesta', 'Add to requisition']))) + '</button></div></div>';
+  }
+  function partPanel(ship) {
+    var cart = partCart(ship), last = UI.partLast ? UI.partLast.map(byId).filter(Boolean) : [];
+    var done = last.length ? '<div class="note" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:var(--ink)"><span>' + esc(L2(['Richieste pronte: ', 'Requisitions ready: '])) + '</span>' + last.map(function (d) { return '<a class="btn sm" href="#/doc/' + d.id + '">' + esc(d.num) + ' →</a>'; }).join('') + '<span class="mute" style="font-size:12px">' + esc(L2(['estratto del disegno allegato', 'drawing extract attached'])) + '</span><button class="btn ghost sm" data-act="partlastx">✕</button></div>' : '';
+    if (!cart.length) return '<div class="cpanel' + (done ? '' : ' idle') + ' stack" style="gap:8px">' + done + '<div class="mute" style="font-size:13px">' + esc(L2(['Clicca i numeri sul disegno e aggiungi i pezzi: finiscono qui. Una richiesta per maker, con l\'estratto del disegno allegato.', 'Click the numbers on the drawing and add the parts: they collect here. One requisition per maker, with the drawing extract attached.'])) + '</div></div>';
+    var byM = {};
+    cart.forEach(function (c) { var m = machineById(c.m); if (m) (byM[m.id] = byM[m.id] || { m: m, items: [] }).items.push(c); });
+    var groups = Object.keys(byM).map(function (k) { return byM[k]; });
+    return '<div class="cpanel stack" style="gap:8px">' + done +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><b>' + esc(L2(['Richiesta ricambi in preparazione', 'Spare parts requisition being prepared'])) + ' · ' + ship + ' · ' + cart.length + ' ' + esc(cart.length === 1 ? L2(['voce', 'item']) : L2(['voci', 'items'])) + '</b><span style="display:flex;gap:6px"><button class="btn ghost sm" data-act="partkitsave">' + esc(L2(['Salva come kit', 'Save as kit'])) + '</button><button class="btn ghost sm" data-act="partclr">' + esc(L2(['Svuota', 'Clear'])) + '</button></span></div>' +
+      groups.map(function (g) {
+        return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="mute" style="font-size:12px;min-width:150px">' + esc(L2(g.m.name)) + ' · ' + esc(g.m.maker) + '</span>' + g.items.map(function (c) {
+          var dw = dwgById(g.m, c.d), p = partBySym(dw, c.sym);
+          return '<span class="chip c-acc" style="gap:6px"><span class="j">' + esc(c.sym) + '</span> ' + esc((p ? p.name : '').slice(0, 26)) + ' ×' + c.qty + '<button class="btn ghost sm" style="padding:0 4px;min-height:0" data-act="partrm" data-d="' + esc(c.d) + '" data-sym="' + esc(c.sym) + '" aria-label="remove">✕</button></span>';
+        }).join('') + '</div>';
+      }).join('') +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;align-items:center"><span class="mute" style="font-size:12px">' + (groups.length > 1 ? esc(L2(['Maker diversi: ', 'Different makers: ']) + groups.length + L2([' richieste separate', ' separate requisitions'])) : '') + '</span><button class="btn pri" data-act="partgo">' + esc(groups.length > 1 ? L2(['Crea ', 'Create ']) + groups.length + L2([' richieste', ' requisitions']) : L2(['Crea la richiesta', 'Create requisition'])) + '</button></div></div>';
+  }
+  function pageParts(q) {
+    var ships = DB.ships.filter(function (s) { return machines(s.code).length; });
+    var nave = q.nave && shipBy(q.nave) ? q.nave : (ships[0] ? ships[0].code : 'MLG');
+    var MS = machines(nave), qq = (q.q || '').trim().toUpperCase();
+    var tabs = '<nav class="tabs ctabs">' + DB.ships.map(function (s) { var n = machines(s.code).length; return '<a class="' + (nave === s.code ? 'on' : '') + '" href="#/ricambi' + qs({ nave: s.code }) + '">' + esc(s.name) + (n ? '<span class="j">' + n + '</span>' : '') + '</a>'; }).join('') + '</nav>';
+    var title = L2(['Ricambi da disegno', 'Parts from drawings']) + ' · ' + shipBy(nave).name;
+    if (!MS.length) return shell('ricambi', crumb([[t('fleet'), '#/']]), title, tabs + '<div class="card"><div class="empty">' + esc(((window.SEED && window.SEED.machines) ? L2(['Per questa nave non ci sono ancora disegni con distinta. La prova è su MED LIGURIA.', 'No drawings with parts list for this vessel yet. The pilot is on MED LIGURIA.']) : L2(['I disegni dei costruttori sono solo nella versione privata del prototipo.', 'Maker drawings are only in the private version of the prototype.']))) + '</div></div>');
+    var m = machineById(q.m) && machineById(q.m).ship === nave ? machineById(q.m) : MS[0];
+    var dw = dwgById(m, q.d) || m.dwgs[0], p = partBySym(dw, q.p);
+    var y = yardOf(nave);
+    var search = '<div class="filters" style="align-items:center"><input type="search" data-filter="q" value="' + esc(q.q || '') + '" placeholder="' + esc(L2(['Cerca codice o nome in tutti i disegni della nave (es. A42017F, O-RING)', 'Search code or name in all the vessel drawings (e.g. A42017F, O-RING)'])) + '" style="flex:1;min-width:200px">' + (y ? '<span class="mute" style="font-size:12px">' + esc(L2(['Per i maker: ', 'For makers: ']) + 'ex ' + y.ex + ' · ' + y.yard + ' ' + y.hull) + '</span>' : '') + '</div>';
+    if (qq) {
+      var res = [];
+      MS.forEach(function (mm) { mm.dwgs.forEach(function (d) { d.parts.forEach(function (pp) { if ((pp.name + ' ' + pp.pn + ' ' + pp.mat).toUpperCase().indexOf(qq) >= 0 || normPn(pp.pn).indexOf(normPn(qq)) >= 0 && normPn(qq)) res.push({ m: mm, d: d, p: pp }); }); }); });
+      var body = tabs + search + '<section class="card stack" style="gap:8px"><h2>' + esc(L2(['Risultati', 'Results'])) + ' <span class="j mute">' + res.length + '</span></h2>' + (res.length ? '<div class="tablebox"><table class="grid"><thead><tr><th>' + esc(L2(['Macchinario', 'Machinery'])) + '</th><th>' + esc(L2(['Disegno', 'Drawing'])) + '</th><th>Pos.</th><th>' + esc(L2(['Pezzo', 'Part'])) + '</th><th>' + esc(L2(['Codice', 'Code'])) + '</th><th>' + esc(L2(['Q.tà', 'Qty'])) + '</th></tr></thead><tbody>' +
+        res.slice(0, 200).map(function (r) { return '<tr class="r" data-href="#/ricambi' + qs({ nave: nave, m: r.m.id, d: r.d.id, p: r.p.sym }) + '"><td>' + esc(L2(r.m.name)) + '<div class="mute" style="font-size:11px">' + esc(r.m.maker + ' ' + r.m.model) + '</div></td><td class="j">' + esc(r.d.no) + '<div class="mute" style="font-size:11px">' + esc(L2(r.d.title)) + '</div></td><td class="j">' + esc(r.p.sym) + '</td><td>' + esc(r.p.name) + '</td><td class="j">' + esc(r.p.pn || '—') + '</td><td>' + esc(r.p.qty) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<div class="mute">' + esc(t('noResults')) + '</div>') + '</section>' + partPanel(nave);
+      return shell('ricambi', crumb([[t('fleet'), '#/']]), title, body);
+    }
+    var kits = partKits(nave).filter(function (k) { return k.items.some(function (i) { return i.m === m.id; }); });
+    var left = '<aside class="plist stack" style="gap:6px">' + MS.map(function (mm) {
+      var on = mm.id === m.id;
+      return '<a class="pmach' + (on ? ' on' : '') + '" href="#/ricambi' + qs({ nave: nave, m: mm.id }) + '"><b>' + esc(L2(mm.name)) + '</b><span>' + esc(mm.maker + (mm.model ? ' · ' + mm.model : '')) + '</span></a>' +
+        (on ? '<div class="stack" style="gap:4px;padding:2px 0 8px 10px">' + mm.dwgs.map(function (d) { return '<a class="pdwg' + (d.id === dw.id ? ' on' : '') + '" href="#/ricambi' + qs({ nave: nave, m: mm.id, d: d.id }) + '"><span class="j">' + esc(d.no) + '</span> ' + esc(L2(d.title)) + ' <span class="mute">(' + d.parts.length + ')</span></a>'; }).join('') +
+          (kits.length ? '<div class="mute" style="font-size:11px;margin-top:6px">KIT</div>' + kits.map(function (k) { return '<div style="display:flex;gap:6px;align-items:center;justify-content:space-between;font-size:13px"><span>' + esc(k.name) + ' <span class="mute">(' + k.items.length + ')</span></span><button class="btn sm" data-act="partkit" data-id="' + esc(k.id) + '">＋</button></div>'; }).join('') : '') + '</div>' : '');
+    }).join('') + '</aside>';
+    var zoom = UI.pzoom || 100;
+    var hs = dw.parts.map(function (pp) {
+      return pp.at.map(function (a) { return '<button class="hs' + (p && p.sym === pp.sym ? ' on' : '') + (partCart(nave).some(function (c) { return c.d === dw.id && c.sym === pp.sym; }) ? ' in' : '') + '" style="left:' + (a[0] * 100) + '%;top:' + (a[1] * 100) + '%" data-act="partpick" data-sym="' + esc(pp.sym) + '" title="' + esc(pp.sym + ' · ' + pp.name) + '" aria-label="' + esc(pp.sym + ' ' + pp.name) + '"></button>'; }).join('');
+    }).join('');
+    var viewer = '<section class="card stack" style="gap:8px;min-width:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><b>' + esc(L2(dw.title)) + '</b> <span class="mute">· DWG <span class="j">' + esc(dw.no) + '</span> · ' + esc(m.maker + ' ' + m.model) + (dw.per === 'CYL' ? ' · ' + L2(['quantità per cilindro', 'quantities per cylinder']) : '') + '</span></div>' +
+      '<span style="display:flex;gap:4px">' + [100, 160, 230].map(function (z) { return '<button class="btn sm ' + (zoom === z ? 'pri' : 'ghost') + '" data-act="pzoom" data-z="' + z + '">' + (z === 100 ? L2(['Intero', 'Fit']) : z + '%') + '</button>'; }).join('') + '</span></div>' +
+      '<div class="pviewer' + (zoom > 100 ? ' zoomed' : '') + '"><div class="pimg" style="width:' + zoom + '%"><img src="' + esc(dw.img.src) + '" alt="' + esc(dw.no + ' ' + L2(dw.title)) + '" width="' + dw.img.w + '" height="' + dw.img.h + '">' + hs + '</div></div>' +
+      '<div class="mute" style="font-size:11px">' + esc(L2(['Fonte: ', 'Source: ']) + dw.page + L2([' · distinta trascritta dalla tavola, da confermare', ' · parts list transcribed from the plate, to be confirmed'])) + '</div></section>';
+    var tbl = '<section class="card stack" style="gap:6px"><h2>' + esc(L2(['Distinta', 'Parts list'])) + ' <span class="j mute">' + dw.parts.length + '</span></h2><div class="tablebox"><table class="grid ptable"><thead><tr><th>Pos.</th><th>' + esc(L2(['Pezzo', 'Part'])) + '</th><th>' + esc(L2(['Materiale', 'Material'])) + '</th><th>' + esc(L2(['Q.tà', 'Qty'])) + '</th><th>' + esc(L2(['Codice maker', 'Maker code'])) + '</th><th></th></tr></thead><tbody>' +
+      dw.parts.map(function (pp) { var inC = partCart(nave).some(function (c) { return c.d === dw.id && c.sym === pp.sym; }); return '<tr class="r' + (p && p.sym === pp.sym ? ' on' : '') + '" data-act="partpick" data-sym="' + esc(pp.sym) + '"><td class="j">' + esc(pp.sym) + '</td><td>' + esc(pp.name) + '</td><td class="mute" style="font-size:12px">' + esc(pp.mat) + '</td><td>' + esc(pp.qty) + '</td><td class="j">' + esc(pp.pn || '—') + '</td><td style="text-align:right">' + (inC ? '<span class="chip c-acc">✓</span>' : '<button class="btn sm" data-act="partadd" data-d="' + esc(dw.id) + '" data-sym="' + esc(pp.sym) + '" data-q="' + esc(parseInt(pp.qty, 10) || 1) + '">＋</button>') + '</td></tr>'; }).join('') + '</tbody></table></div></section>';
+    var body = tabs + search + '<div class="pgrid">' + left + '<div class="stack" style="gap:12px;min-width:0">' + viewer + tbl + '</div><aside class="pside">' + partCard(nave, m, dw, p) + '</aside></div>' + partPanel(nave);
+    return shell('ricambi', crumb([[t('fleet'), '#/']]), title, body);
+  }
+  function partQ() { var r = route(); return r.q; }
+  CLICK.partpick = function (a) {
+    var q = partQ(), sym = a.getAttribute('data-sym');
+    var m = machineById(q.m) || machines(q.nave || 'MLG')[0], dw = dwgById(m, q.d) || m.dwgs[0];
+    var nh = '#/ricambi' + qs({ nave: m.ship, m: m.id, d: dw.id, p: sym });
+    keepView(function () { history.replaceState(null, '', nh); render(); });
+    if (window.innerWidth < 980) { var c = document.querySelector('.pside'); if (c) c.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+  };
+  CLICK.pzoom = function (a) { UI.pzoom = +a.getAttribute('data-z'); render(); };
+  CLICK.partadd = function (a) {
+    var q = partQ(), did = a.getAttribute('data-d'), sym = a.getAttribute('data-sym'), m = null;
+    machines().forEach(function (mm) { if (dwgById(mm, did)) m = mm; }); if (!m) return;
+    var inp = a.getAttribute('data-q') ? null : document.querySelector('[data-partqty]');
+    var qty = Math.max(1, parseInt(inp ? inp.value : a.getAttribute('data-q'), 10) || 1);
+    var L = partCart(m.ship), ex = L.filter(function (c) { return c.d === did && c.sym === sym; })[0];
+    if (ex) ex.qty = qty; else L.push({ m: m.id, d: did, sym: sym, qty: qty });
+    save(); keepView(render);
+  };
+  CLICK.partrm = function (a) { var nave = partQ().nave || 'MLG', L = partCart(nave); DB.partCart[nave] = L.filter(function (c) { return !(c.d === a.getAttribute('data-d') && c.sym === a.getAttribute('data-sym')); }); save(); keepView(render); };
+  CLICK.partclr = function () { DB.partCart[partQ().nave || 'MLG'] = []; save(); keepView(render); };
+  CLICK.partlastx = function () { UI.partLast = null; keepView(render); };
+  CLICK.partkit = function (a) {
+    var k = partKits().filter(function (x) { return x.id === a.getAttribute('data-id'); })[0]; if (!k) return;
+    var L = partCart(k.ship);
+    k.items.forEach(function (i) { var ex = L.filter(function (c) { return c.d === i.d && c.sym === i.sym; })[0]; if (ex) ex.qty = i.qty; else L.push({ m: i.m, d: i.d, sym: i.sym, qty: i.qty }); });
+    save(); keepView(render); toast(L2(['Kit aggiunto: ', 'Kit added: ']) + k.name);
+  };
+  CLICK.partkitsave = function () {
+    var nave = partQ().nave || 'MLG', L = partCart(nave); if (!L.length) return;
+    formModal(L2(['Salva come kit', 'Save as kit']), '<label>' + esc(L2(['Nome del kit', 'Kit name'])) + '<input name="n" required placeholder="' + esc(L2(['es. Revisione iniettore', 'e.g. Injector overhaul'])) + '"></label><div class="mute" style="font-size:12px">' + L.length + ' ' + esc(L2(['voci con le quantità attuali. La prossima volta le aggiungi in un clic.', 'items with the current quantities. Next time you add them in one click.'])) + '</div>', function (f) {
+      partKits(); DB.partKits.push({ id: 'K-' + Date.now(), ship: nave, name: f.elements.n.value.trim(), items: JSON.parse(JSON.stringify(L)) }); save(); render(); toast(L2(['Kit salvato', 'Kit saved']));
+    }, { ok: L2(['Salva', 'Save']) });
+  };
+  function partExtract(m, dw, syms) {
+    return new Promise(function (res) {
+      var im = new Image();
+      im.onload = function () {
+        var top = 70, cv = document.createElement('canvas'); cv.width = im.naturalWidth; cv.height = im.naturalHeight + top;
+        var g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.drawImage(im, 0, top);
+        var y = yardOf(m.ship), sh = shipBy(m.ship);
+        g.fillStyle = '#000'; g.font = 'bold 24px sans-serif';
+        g.fillText(sh.name + (y ? ' (ex ' + y.ex + ', ' + y.yard + ' ' + y.hull + ')' : '') + ' · ' + m.maker + ' ' + m.model, 16, 30);
+        g.font = '20px sans-serif'; g.fillText('DWG ' + dw.no + ' · ' + L2(dw.title) + ' · pos. ' + syms.join(', '), 16, 58);
+        g.strokeStyle = '#e11d48'; g.lineWidth = 5;
+        dw.parts.forEach(function (p) { if (syms.indexOf(p.sym) < 0) return; p.at.forEach(function (a) { g.beginPath(); g.arc(a[0] * im.naturalWidth, a[1] * im.naturalHeight + top, 34, 0, 2 * Math.PI); g.stroke(); }); });
+        cv.toBlob(function (b) { res(b); }, 'image/png');
+      };
+      im.onerror = function () { res(null); };
+      im.src = dw.img.src;
+    });
+  }
+  CLICK.partgo = function () {
+    var nave = partQ().nave || 'MLG', L = partCart(nave); if (!L.length) return;
+    var byM = {}; L.forEach(function (c) { (byM[c.m] = byM[c.m] || []).push(c); });
+    var y = yardOf(nave), made = [];
+    Object.keys(byM).forEach(function (mid) {
+      var m = machineById(mid), items = byM[mid];
+      var lines = items.map(function (c, i) { var dw = dwgById(m, c.d), p = partBySym(dw, c.sym); return { row: (i + 1) * 10, item: null, code: p.pn || '', impa: '', desc: (p.name + ' · DWG ' + dw.no + ' pos. ' + p.sym).slice(0, 200), note: (m.maker + ' ' + m.model + (p.pn ? '' : ' · ' + L2(['codice da confermare', 'code to be confirmed']))).trim(), uom: 'PCE', qty: c.qty }; });
+      var d = newDoc('RQ', nave, { desc: (L2(['Ricambi ', 'Spares ']) + L2(m.name).toLowerCase() + ' ' + m.maker + ' ' + m.model + (y ? ' (ex ' + y.ex + ', ' + y.hull + ')' : '')).slice(0, 120), status: P.seat === 'ship' ? 'bozza' : 'endorsed', side: P.seat === 'ship' ? 'ship' : 'office', dept: 'ENG', due: addDays(TODAY, 30), lines: lines, partsFrom: m.id, attachments: [] }, L2(['Creata dai disegni', 'Created from drawings']));
+      made.push(d);
+      var dws = {}; items.forEach(function (c) { (dws[c.d] = dws[c.d] || []).push(c.sym); });
+      Object.keys(dws).forEach(function (did) {
+        var dw = dwgById(m, did);
+        partExtract(m, dw, dws[did]).then(function (b) {
+          if (!b) return;
+          var f; try { f = new File([b], 'DWG_' + dw.no.replace(/[^A-Za-z0-9-]/g, '') + '_' + dws[did].join('-').slice(0, 40) + '.png', { type: 'image/png' }); } catch (e) { f = b; f.name = 'DWG_' + dw.no + '.png'; }
+          uploadFiles([f], function (out) { out.forEach(function (fl) { d.attachments.push({ id: 'A-' + fl.key, name: L2(['Estratto disegno ', 'Drawing extract ']) + dw.no, kind: L2(['Disegno', 'Drawing']), file: fl, auto: true, from: 'DWG ' + dw.no }); }); save(); });
+        });
+      });
+    });
+    DB.partCart[nave] = []; UI.partLast = made.map(function (d) { return d.id; }); save(); keepView(render);
+    toast(made.length + ' ' + L2(['richieste create', 'requisitions created']) + ': ' + made.map(function (d) { return d.num; }).join(', '));
+  };
+
   /* ---------- render & events ---------- */
   function render() {
     UI.kids = null;
@@ -3466,6 +3660,7 @@
     else if (s[0] === 'fornitori') html = pageSuppliers(r.q);
     else if (s[0] === 'fornitore') html = pageSupplier(decodeURIComponent(s[1]));
     else if (s[0] === 'scadenze') html = pageDue(r.q);
+    else if (s[0] === 'ricambi') html = pageParts(r.q);
     else if (s[0] === 'certificati' || (s[0] === 'modulo' && s[1] === 'certificati')) html = pageCerts(r.q);
     else if (s[0] === 'modulo') html = pageSoon(s[1]);
     else if (s[0] === 'magazzino') html = pageStores(r.q);

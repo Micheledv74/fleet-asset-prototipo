@@ -317,3 +317,30 @@ table.grid td a[href^="#/fornitore"]{display:inline-block;min-width:140px}
   .ctable,.ctable tbody{display:block;width:100%;min-width:0!important}
   .ctable tr.crow td:nth-child(3) div{max-width:none!important}
 }
+
+/* ricambi da disegno */
+.pgrid{display:grid;grid-template-columns:230px minmax(0,1fr) 300px;gap:14px;align-items:start}
+.plist{position:sticky;top:12px}
+.pmach{display:flex;flex-direction:column;gap:2px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--panel);text-decoration:none;color:inherit}
+.pmach span{font-size:12px;color:var(--mute)}
+.pmach.on{border-color:var(--acc);background:var(--accSoft)}
+.pdwg{font-size:13px;text-decoration:none;color:inherit;padding:4px 6px;border-radius:6px}
+.pdwg.on{background:var(--accSoft);font-weight:600}
+.pviewer{overflow:auto;border:1px solid var(--line);border-radius:10px;background:#fff}
+.pimg{position:relative;min-width:100%}
+.pimg img{display:block;width:100%;height:auto}
+.hs{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;border:2px solid transparent;background:rgba(234,88,12,.08);cursor:pointer;padding:0;transition:background .12s,border-color .12s}
+.hs:hover{background:rgba(234,88,12,.25);border-color:var(--acc)}
+.hs.in{border-color:#16a34a;background:rgba(22,163,74,.18)}
+.hs.on{border-color:#e11d48;background:rgba(225,29,72,.22);box-shadow:0 0 0 4px rgba(225,29,72,.18)}
+.pside{position:sticky;top:12px}
+.pcard{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:14px}
+.pkv{display:flex;flex-direction:column;gap:1px;font-size:13px}
+.pkv span{font-size:11px;color:var(--mute)}
+.pkv b{font-weight:500}
+.ptable tr.on td{background:var(--accSoft)}
+@media (max-width:1180px){.pgrid{grid-template-columns:200px minmax(0,1fr)}.pside{grid-column:1/-1;position:static}}
+@media (max-width:760px){.pgrid{grid-template-columns:1fr}.plist{position:static}.pviewer{max-height:60vh}.hs{width:26px;height:26px;margin:-13px 0 0 -13px}.rail a{font-size:9.5px}}
+
+.pviewer.zoomed{max-height:80vh}
+.cpanel.idle{position:static;box-shadow:none;border-color:var(--line)}
